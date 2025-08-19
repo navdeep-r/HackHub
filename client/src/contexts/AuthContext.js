@@ -1,9 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authAPI } from '../services/api';
 import toast from 'react-hot-toast';
-
 const AuthContext = createContext();
-
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -54,9 +52,21 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async (userData) => {
-    // You can implement a mock register if needed
-    toast.success('Registration successful!');
-    return userData;
+    setLoading(true);
+    try {
+      const { data } = await authAPI.register(userData);
+      const { token, user: createdUser } = data;
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(createdUser));
+      setUser(createdUser);
+      toast.success('Registration successful!');
+      return createdUser;
+    } catch (error) {
+      toast.error('Registration failed!');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const logout = () => {

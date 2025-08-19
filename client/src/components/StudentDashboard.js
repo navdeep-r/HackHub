@@ -6,6 +6,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import HackathonModal from './HackathonModal';
 import { hackathonAPI, studentAPI } from '../services/api';
+import toast from 'react-hot-toast';
 
 const CATEGORY_ICONS = {
   'AI/ML': <Zap className="inline text-cyan-400" size={18} />, 
@@ -52,10 +53,27 @@ function useCountUp(target, duration = 1000) {
 const StudentDashboard = () => {
   const { user, logout } = useAuth();
   const [hackathons, setHackathons] = useState([]);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileForm, setProfileForm] = useState({ name: '', department: '', year: 1, registrationNumber: '' });
   useEffect(() => {
     let mounted = true;
     const loadAll = async () => {
       try {
+        // Ensure profile completeness for students
+        if (user?.role === 'student') {
+          const { data: prof } = await studentAPI.getProfile();
+          const u = prof.user || {};
+          const missing = !u.name || !u.department || !u.year || !u.registrationNumber;
+          if (missing) {
+            setProfileForm({
+              name: u.name || '',
+              department: u.department || '',
+              year: u.year || 1,
+              registrationNumber: u.registrationNumber || ''
+            });
+            setShowProfileModal(true);
+          }
+        }
         const [{ data: hacks }, { data: regs }] = await Promise.all([
           hackathonAPI.getStudentHackathons(),
           studentAPI.getRegistrations(),
@@ -122,6 +140,42 @@ const StudentDashboard = () => {
 
   return (
     <div className="min-h-screen bg-[#0D1117] text-white">
+      {showProfileModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="bg-[#0D1117] border border-[#1F2937] rounded-2xl shadow-2xl w-full max-w-xl p-6">
+            <h2 className="text-2xl font-bold mb-4">Complete Your Profile</h2>
+            <p className="text-[#A0AEC0] mb-4 text-sm">Please provide the following details to continue.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-[#A0AEC0] mb-1">Name</label>
+                <input className="w-full p-3 rounded-lg bg-[#0B1220] border border-[#1F2937] text-white" value={profileForm.name} onChange={(e) => setProfileForm(p => ({ ...p, name: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-sm text-[#A0AEC0] mb-1">Department</label>
+                <input className="w-full p-3 rounded-lg bg-[#0B1220] border border-[#1F2937] text-white" value={profileForm.department} onChange={(e) => setProfileForm(p => ({ ...p, department: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-sm text-[#A0AEC0] mb-1">Year (1-4)</label>
+                <input type="number" min="1" max="4" className="w-full p-3 rounded-lg bg-[#0B1220] border border-[#1F2937] text-white" value={profileForm.year} onChange={(e) => setProfileForm(p => ({ ...p, year: Number(e.target.value) }))} />
+              </div>
+              <div>
+                <label className="block text-sm text-[#A0AEC0] mb-1">Registration Number</label>
+                <input className="w-full p-3 rounded-lg bg-[#0B1220] border border-[#1F2937] text-white" value={profileForm.registrationNumber} onChange={(e) => setProfileForm(p => ({ ...p, registrationNumber: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => { toast.error('Profile required to proceed'); }} className="px-4 py-2 rounded-lg bg-[#111827] text-[#A0AEC0] border border-[#1F2937]">Cancel</button>
+              <button onClick={async () => {
+                try {
+                  await studentAPI.updateProfile(profileForm);
+                  toast.success('Profile updated');
+                  setShowProfileModal(false);
+                } catch (_) {}
+              }} className="px-4 py-2 rounded-lg bg-gradient-to-r from-[#00AEEF] to-[#20C997] text-white">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header & Stats */}
       <div className="relative bg-gradient-to-r from-[#0D1117] via-[#00AEEF]/30 to-[#20C997]/20 pb-8 pt-6 px-4 md:px-0 animate-fade-in">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
