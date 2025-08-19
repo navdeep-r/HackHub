@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { analyticsAPI, hackathonAPI } from '../services/api';
+import toast from 'react-hot-toast';
 
 const THEME_ICONS = {
   'AI/ML': <Zap className="inline mr-1 text-cyan-400" size={16} />,
@@ -63,6 +64,10 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
   const [analytics, setAnalytics] = useState(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
   const [showRegisteredModal, setShowRegisteredModal] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [gmailLinked, setGmailLinked] = useState(false);
+  const [gmailAuthUrl, setGmailAuthUrl] = useState(null);
+  const [pendingMonitor, setPendingMonitor] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortKey, setSortKey] = useState('registrationDate');
   const [sortDir, setSortDir] = useState('desc');
@@ -117,15 +122,59 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
 
   const handleRegisterNow = async () => {
     try {
-      await hackathonAPI.registerForHackathon(hackathon.id, { emailUsed: user?.email });
+      setRegistering(true);
+      const { data } = await hackathonAPI.registerForHackathon(hackathon.id, { emailUsed: user?.email });
+      setGmailLinked(Boolean(data.gmailLinked));
+      setGmailAuthUrl(data.gmailAuthUrl || null);
+      setPendingMonitor(!data.monitoringStarted);
       setIsRegistered(true);
+      toast.success('Registered. We will confirm via email if a confirmation is received.');
+      if (!data.gmailLinked && data.gmailAuthUrl) {
+        toast('Please link Gmail to allow confirmation check.', { icon: '📧' });
+        // Optionally open in new tab
+        window.open(data.gmailAuthUrl, '_blank', 'noopener');
+      }
       if (typeof onRegistered === 'function') {
         onRegistered(hackathon.id);
       }
     } catch (error) {
       console.error('Registration failed:', error);
+      toast.error(error?.response?.data?.error || 'Registration failed');
+    } finally {
+      setRegistering(false);
     }
   };
+
+  // Poll for confirmation status when pendingMonitor
+  useEffect(() => {
+    if (!(role === 'student' && isRegistered && pendingMonitor)) return undefined;
+    let cancelled = false;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/students/registration-status/${hackathon.id}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const status = data?.registration?.confirmationStatus;
+        if (status === 'confirmed') {
+          if (!cancelled) {
+            setPendingMonitor(false);
+            toast.success('Registration confirmed via email.');
+          }
+          clearInterval(interval);
+        }
+        if (status === 'failed') {
+          if (!cancelled) {
+            setPendingMonitor(false);
+            toast('No confirmation email found within the window.', { icon: '⏳' });
+          }
+          clearInterval(interval);
+        }
+      } catch (_) {}
+    }, 30 * 1000); // poll every 30s
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [role, isRegistered, pendingMonitor, hackathon?.id]);
 
   const handleExportCSV = () => {
     if (!analytics?.registeredStudents) return;

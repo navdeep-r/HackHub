@@ -70,6 +70,28 @@ const hackathonSchema = new mongoose.Schema({
       type: String,
       enum: ['pending', 'confirmed', 'failed'],
       default: 'pending'
+    },
+    platform: {
+      type: String,
+      enum: ['unstop', 'dorahacks', 'devpost', 'hackerearth', 'hackerrank', 'topcoder', 'codeforces', 'leetcode', 'kaggle', 'mlh', 'custom'],
+      default: 'unstop'
+    },
+    confirmedAt: {
+      type: Date
+    },
+    confirmationChecks: {
+      type: Number,
+      default: 0
+    },
+    lastCheckedAt: {
+      type: Date
+    },
+    confirmationEmail: {
+      id: String,
+      subject: String,
+      from: String,
+      date: Date,
+      snippet: String
     }
   }],
   // Impression tracking for analytics
@@ -147,7 +169,6 @@ hackathonSchema.methods.registerStudent = function(studentId, emailUsed) {
     student: studentId,
     emailUsed: emailUsed
   });
-  this.registrations += 1;
   return this.save();
 };
 
@@ -159,6 +180,8 @@ hackathonSchema.methods.confirmRegistration = function(studentId) {
   
   if (registration) {
     registration.confirmationStatus = 'confirmed';
+    registration.confirmedAt = new Date();
+    this.registrations += 1;
     return this.save();
   }
   throw new Error('Registration not found');

@@ -1,6 +1,7 @@
 const { google } = require('googleapis');
 const User = require('../models/User');
 const Hackathon = require('../models/Hackathon');
+const notifier = require('./notifier');
 
 class GoogleAuthService {
   constructor() {
@@ -48,29 +49,34 @@ class GoogleAuthService {
     }
   }
 
-  // Monitor emails for hackathon confirmations
-  async monitorEmailsForConfirmation(userId, hackathonId, emailAddresses) {
+  // Monitor emails for hackathon confirmations (12-hour window, unstop.com focus)
+  async monitorEmailsForConfirmation(userId, hackathonId, emailAddresses, options = {}) {
     try {
+      const {
+        allowedDomains = ['unstop.com'],
+        subjectRegex = /(registration|confirmed|success|welcome|you are registered|registration successful)/i,
+        lookbackHours = 12
+      } = options;
+
       const user = await User.findById(userId);
-      if (!user || !user.googleAccessToken) {
+      if (!user || !user.google || !user.google.accessToken) {
         throw new Error('User not found or Google access token not available');
       }
 
       // Set up Gmail API
       this.oauth2Client.setCredentials({
-        access_token: user.googleAccessToken,
-        refresh_token: user.googleRefreshToken
+        access_token: user.google.accessToken,
+        refresh_token: user.google.refreshToken
       });
 
       const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client });
 
-      // Search for confirmation emails in the last 24 hours
-      const oneDayAgo = new Date();
-      oneDayAgo.setDate(oneDayAgo.getDate() - 1);
-      const afterDate = oneDayAgo.toISOString().split('T')[0];
+      // Search for confirmation emails in the last N hours
+      const since = new Date(Date.now() - lookbackHours * 60 * 60 * 1000);
 
-      // Create search query for confirmation emails
-      const searchQuery = `(from:${this.getHackathonEmailDomains()}) (subject:confirmation OR subject:registered OR subject:success) after:${afterDate}`;
+      // Create search query for confirmation emails from allowed domains
+      const fromFilter = allowedDomains.map(d => `from:${d}`).join(' OR ');
+      const searchQuery = `(${fromFilter}) newer_than:${lookbackHours}h`;
 
       const response = await gmail.users.messages.list({
         userId: 'me',
@@ -93,23 +99,47 @@ class GoogleAuthService {
         const subject = headers.find(h => h.name === 'Subject')?.value || '';
         const from = headers.find(h => h.name === 'From')?.value || '';
 
-        // Check if this is a confirmation email for the specific hackathon
-        if (this.isConfirmationEmail(subject, from, emailAddresses)) {
-          // Update hackathon registration status
-          await Hackathon.findByIdAndUpdate(hackathonId, {
-            $set: {
-              'registeredStudents.$[elem].confirmationStatus': 'confirmed',
-              'registeredStudents.$[elem].confirmedAt': new Date()
-            }
-          }, {
-            arrayFilters: [{ 'elem.student': userId }],
-            new: true
-          });
+        const subjectMatch = subjectRegex.test(subject);
+        const fromLower = from.toLowerCase();
+        const domainMatch = allowedDomains.some(d => fromLower.includes(d));
 
-          confirmationFound = true;
-          console.log(`Confirmation found for user ${userId} in hackathon ${hackathonId}`);
-          break;
+        if (!(subjectMatch && domainMatch)) continue;
+
+        // Update hackathon registration status and metadata
+        const updated = await Hackathon.findOneAndUpdate(
+          { _id: hackathonId, 'registeredStudents.student': userId },
+          {
+            $set: {
+              'registeredStudents.$.confirmationStatus': 'confirmed',
+              'registeredStudents.$.confirmedAt': new Date(),
+              'registeredStudents.$.platform': 'unstop',
+              'registeredStudents.$.confirmationEmail': {
+                id: message.id,
+                subject,
+                from,
+                date: new Date(headers.find(h => h.name === 'Date')?.value || Date.now()),
+                snippet: email.data.snippet
+              }
+            },
+            $inc: { 'registeredStudents.$.confirmationChecks': 1, registrations: 1 }
+          },
+          { new: true }
+        );
+
+        // Notify faculty dashboard/webhook
+        try {
+          await notifier.notifyRegistrationConfirmed({
+            hackathonId,
+            userId,
+            platform: 'unstop',
+            email: updated?.registeredStudents?.find(r => String(r.student) === String(userId))?.confirmationEmail || null
+          });
+        } catch (notifyErr) {
+          console.error('Notifier error:', notifyErr.message);
         }
+
+        confirmationFound = true;
+        break;
       }
 
       return confirmationFound;
@@ -141,38 +171,19 @@ class GoogleAuthService {
     ].join(' OR from:');
   }
 
-  // Check if email is a confirmation email
-  isConfirmationEmail(subject, from, userEmails) {
-    const confirmationKeywords = [
-      'confirmation',
-      'registered',
-      'success',
-      'welcome',
-      'confirmed',
-      'registration successful',
-      'you are registered',
-      'registration confirmed'
-    ];
+  // Deprecated helper removed in favor of explicit domain + regex matching
 
-    const subjectLower = subject.toLowerCase();
-    const fromLower = from.toLowerCase();
-
-    // Check if subject contains confirmation keywords
-    const hasConfirmationKeyword = confirmationKeywords.some(keyword => 
-      subjectLower.includes(keyword)
-    );
-
-    // Check if from address matches user's emails
-    const fromMatchesUserEmail = userEmails.some(email => 
-      fromLower.includes(email.toLowerCase())
-    );
-
-    return hasConfirmationKeyword || fromMatchesUserEmail;
-  }
-
-  // Start monitoring for a specific registration
-  async startMonitoring(userId, hackathonId, emailUsed) {
+  // Start monitoring for a specific registration (every X minutes up to 12 hours)
+  async startMonitoring(userId, hackathonId, emailUsed, options = {}) {
     try {
+      const {
+        intervalMinutes = 5,
+        totalWindowHours = 12,
+        allowedDomains = ['unstop.com'],
+        subjectRegex = /(registration|confirmed|success|welcome|you are registered|registration successful)/i
+      } = options;
+
+      const startedAt = Date.now();
       // Schedule email monitoring
       const monitoringInterval = setInterval(async () => {
         try {
@@ -194,30 +205,41 @@ class GoogleAuthService {
             return;
           }
 
-          // Monitor emails
-          const emailAddresses = [user.email];
-          if (user.secondaryEmail) {
-            emailAddresses.push(user.secondaryEmail);
-          }
+          // Monitor emails (focus on unstop)
+          const emailAddresses = [user.email, user.secondaryEmail].filter(Boolean);
 
-          const confirmationFound = await this.monitorEmailsForConfirmation(
-            userId, 
-            hackathonId, 
-            emailAddresses
-          );
+          const confirmationFound = await this.monitorEmailsForConfirmation(userId, hackathonId, emailAddresses, {
+            allowedDomains,
+            subjectRegex,
+            lookbackHours: totalWindowHours
+          });
 
           if (confirmationFound) {
             clearInterval(monitoringInterval);
           }
+
+          // update check counters
+          await Hackathon.updateOne(
+            { _id: hackathonId, 'registeredStudents.student': userId },
+            {
+              $inc: { 'registeredStudents.$.confirmationChecks': 1 },
+              $set: { 'registeredStudents.$.lastCheckedAt': new Date() }
+            }
+          );
         } catch (error) {
           console.error('Error in monitoring interval:', error);
         }
-      }, 5 * 60 * 1000); // Check every 5 minutes
+      }, intervalMinutes * 60 * 1000);
 
-      // Stop monitoring after 24 hours
+      // Stop monitoring after totalWindowHours
       setTimeout(() => {
         clearInterval(monitoringInterval);
-      }, 24 * 60 * 60 * 1000);
+        // Mark as failed if still pending
+        Hackathon.updateOne(
+          { _id: hackathonId, registeredStudents: { $elemMatch: { student: userId, confirmationStatus: 'pending' } } },
+          { $set: { 'registeredStudents.$.confirmationStatus': 'failed' } }
+        ).catch(() => {});
+      }, totalWindowHours * 60 * 60 * 1000);
 
       return true;
     } catch (error) {
