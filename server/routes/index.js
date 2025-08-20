@@ -11,5 +11,3 @@ router.use('/gmail', require('./gmail'));
 router.use('/patterns', require('./patterns'));
 
 module.exports = router;
-
-
