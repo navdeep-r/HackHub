@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Search, Calendar, ExternalLink, Eye, UserCheck, 
+import {
+  Search, Calendar, ExternalLink, Eye, UserCheck,
   Bell, BookOpen, Building, Star, CheckCircle, Flame, Layers, Zap
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,9 +9,9 @@ import { hackathonAPI, studentAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
 const CATEGORY_ICONS = {
-  'AI/ML': <Zap className="inline text-cyan-400" size={18} />, 
+  'AI/ML': <Zap className="inline text-cyan-400" size={18} />,
   'Web Dev': <Layers className="inline text-purple-400" size={18} />,
-  'Blockchain': <Star className="inline text-yellow-400" size={18} />, 
+  'Blockchain': <Star className="inline text-yellow-400" size={18} />,
   'IoT': <Building className="inline text-green-400" size={18} />,
   'Cybersecurity': <Bell className="inline text-pink-400" size={18} />,
   'Data Science': <BookOpen className="inline text-orange-400" size={18} />,
@@ -102,7 +102,7 @@ const StudentDashboard = () => {
     };
     loadAll();
     return () => { mounted = false; };
-  }, []);
+  }, [user]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
   const [showModal, setShowModal] = useState(false);
@@ -117,7 +117,7 @@ const StudentDashboard = () => {
   const handleRegister = async (hackathonId) => {
     try {
       await hackathonAPI.registerForHackathon(hackathonId, { emailUsed: user?.email });
-      setHackathons(prev => prev.map(h => 
+      setHackathons(prev => prev.map(h =>
         h.id === hackathonId ? { ...h, isRegistered: true } : h
       ));
     } catch (e) {
@@ -133,7 +133,7 @@ const StudentDashboard = () => {
   const filteredHackathons = hackathons
     .filter(hackathon => {
       const matchesSearch = hackathon.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           hackathon.description.toLowerCase().includes(searchTerm.toLowerCase());
+        hackathon.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = filterCategory === 'all' || hackathon.category === filterCategory;
       return matchesSearch && matchesCategory;
     });
@@ -170,7 +170,7 @@ const StudentDashboard = () => {
                   await studentAPI.updateProfile(profileForm);
                   toast.success('Profile updated');
                   setShowProfileModal(false);
-                } catch (_) {}
+                } catch (_) { }
               }} className="px-4 py-2 rounded-lg bg-gradient-to-r from-[#00AEEF] to-[#20C997] text-white">Save</button>
             </div>
           </div>
@@ -183,7 +183,7 @@ const StudentDashboard = () => {
             <h1 className="text-3xl font-extrabold text-white">Student Dashboard</h1>
             <p className="text-[#A0AEC0] mt-1">Welcome, {user?.name || 'Student'}</p>
           </div>
-          <button 
+          <button
             onClick={logout}
             className="bg-gradient-to-r from-[#00AEEF] to-[#20C997] text-white px-5 py-2 rounded-full font-bold shadow-lg hover:scale-105 hover:ring-2 hover:ring-[#5EEAD4] transition-transform"
           >
@@ -279,7 +279,7 @@ const StudentDashboard = () => {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                {CATEGORY_ICONS[hackathon.category] || <Star size={18} className="text-[#A0AEC0] flex-shrink-0" />} 
+                {CATEGORY_ICONS[hackathon.category] || <Star size={18} className="text-[#A0AEC0] flex-shrink-0" />}
                 <span className="text-xs text-[#00AEEF] break-words">{hackathon.category}</span>
               </div>
             </div>
@@ -309,13 +309,13 @@ const StudentDashboard = () => {
             </div>
             {/* External Link */}
             <div className="mt-4 pt-4 border-t border-[#A0AEC0]/20">
-              <a 
-                href={hackathon.link} 
-                target="_blank" 
+              <a
+                href={hackathon.link}
+                target="_blank"
                 rel="noopener noreferrer"
                 className="text-[#00AEEF] hover:text-[#5EEAD4] text-xs flex items-center gap-1 break-words"
               >
-                <ExternalLink size={14} className="flex-shrink-0" /> 
+                <ExternalLink size={14} className="flex-shrink-0" />
                 <span className="break-words">Visit Competition Page</span>
               </a>
             </div>

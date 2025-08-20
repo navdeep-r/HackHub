@@ -12,7 +12,7 @@
     "server": "cd server && npm run dev",
     "client": "cd client && npm start",
     "build": "cd client && npm run build",
-    "install-all": "npm install && cd server && npm install && cd ../client && npm install",
+    "install-all": "npm install --ignore-scripts && cd server && npm install --ignore-scripts && cd ../client && npm install --ignore-scripts",
     "start": "cd server && npm start",
     "server:install": "cd server && npm install",
     "client:install": "cd client && npm install",
@@ -25,7 +25,13 @@
     "lint:server": "cd server && npm run lint",
     "lint:client": "cd client && npm run lint"
   },
-  "keywords": ["hackathon", "management", "education", "react", "nodejs"],
+  "keywords": [
+    "hackathon",
+    "management",
+    "education",
+    "react",
+    "nodejs"
+  ],
   "author": "HackHub Team",
   "license": "MIT",
   "devDependencies": {
