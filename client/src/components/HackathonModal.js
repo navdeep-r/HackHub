@@ -171,7 +171,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
           }
           clearInterval(interval);
         }
-      } catch (_) {}
+      } catch (_) { }
     }, 30 * 1000); // poll every 30s
     return () => { cancelled = true; clearInterval(interval); };
   }, [role, isRegistered, pendingMonitor, hackathon?.id]);
@@ -204,7 +204,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
   const filteredStudents = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     let filtered = registeredStudents;
-    
+
     if (q) {
       filtered = registeredStudents.filter((r) => {
         const name = (r.student?.name || '').toLowerCase();
@@ -426,23 +426,23 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                   <Download size={16} />
                   Export CSV
                 </button>
-                <button 
-                  onClick={() => setShowRegisteredModal(false)} 
+                <button
+                  onClick={() => setShowRegisteredModal(false)}
                   className="text-gray-400 hover:text-gray-600 transition-colors"
                 >
                   <X size={24} />
                 </button>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-4">
               <div className="flex-1 relative">
                 <Search size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input 
-                  value={searchQuery} 
-                  onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }} 
-                  placeholder="Search by name, email, department, or year..." 
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                <input
+                  value={searchQuery}
+                  onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+                  placeholder="Search by name, email, department, or year..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div className="text-sm text-gray-600">
@@ -450,7 +450,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
               </div>
             </div>
           </div>
-          
+
           {/* Table */}
           <div className="flex-1 overflow-hidden">
             <div className="overflow-auto h-full">
@@ -464,10 +464,10 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                       { key: 'year', label: 'Year' },
                       { key: 'registrationDate', label: 'Registration Date' }
                     ].map(({ key, label }) => (
-                      <th 
-                        key={key} 
+                      <th
+                        key={key}
                         className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors select-none"
-                        onClick={() => { 
+                        onClick={() => {
                           if (sortKey === key) {
                             setSortDir(d => d === 'asc' ? 'desc' : 'asc');
                           } else {
@@ -513,8 +513,8 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
-                          {registration.registrationDate 
-                            ? new Date(registration.registrationDate).toLocaleString() 
+                          {registration.registrationDate
+                            ? new Date(registration.registrationDate).toLocaleString()
                             : '-'
                           }
                         </div>
@@ -540,9 +540,9 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                 Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, filteredStudents.length)} of {filteredStudents.length} results
               </div>
               <div className="flex items-center gap-2">
-                <button 
-                  disabled={currentPage === 1} 
-                  onClick={() => setPage(p => Math.max(1, p - 1))} 
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
                   className="flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
                 >
                   <ChevronLeft size={16} />
@@ -551,9 +551,9 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                 <span className="px-3 py-2 text-sm text-gray-700">
                   Page {currentPage} of {totalPages}
                 </span>
-                <button 
-                  disabled={currentPage === totalPages} 
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
+                <button
+                  disabled={currentPage === totalPages}
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   className="flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
                 >
                   Next
@@ -572,13 +572,13 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
       <div className="w-full max-w-6xl h-full max-h-[95vh] overflow-hidden">
         {/* Background Image */}
-        <div 
+        <div
           className="absolute inset-0 bg-cover bg-center rounded-2xl opacity-20"
           style={{
             backgroundImage: "url('https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=1200&q=80')"
           }}
         />
-        
+
         {/* Main Modal */}
         <div className="relative bg-gray-900/95 backdrop-blur-xl border border-gray-700 shadow-2xl rounded-2xl overflow-hidden flex flex-col h-full">
           {/* Close Button */}
@@ -600,7 +600,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                 <p className="text-gray-300 text-base lg:text-lg mb-4 leading-relaxed line-clamp-2">
                   {hackathon.description}
                 </p>
-                 
+
                 {/* Registration Status for Students */}
                 {role === 'student' && isRegistered && (
                   <div className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-green-500/20 border border-green-500 text-green-400 font-semibold text-sm">
@@ -649,7 +649,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                       <div className="text-xs text-gray-400 mt-1">Mins</div>
                     </div>
                   </div>
-                  
+
                   {/* Progress Bar */}
                   <div className="w-full mt-3 h-2 bg-gray-700 rounded-full overflow-hidden">
                     <div
@@ -693,15 +693,15 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                         <div className="flex-1">
                           <div className="text-white font-medium text-sm lg:text-base">{phase.label}</div>
                           <div className="text-gray-400 text-xs lg:text-sm">
-                            {hackathon[phase.key] 
+                            {hackathon[phase.key]
                               ? new Date(hackathon[phase.key]).toLocaleDateString('en-US', {
-                                  weekday: 'long',
-                                  year: 'numeric',
-                                  month: 'long',
-                                  day: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })
+                                weekday: 'long',
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })
                               : 'TBA'
                             }
                           </div>
@@ -722,7 +722,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                         <div className="text-white font-medium truncate text-sm">{hackathon.location || 'Online'}</div>
                       </div>
                     </div>
-                     
+
                     <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
                       <Gift className="text-green-400 flex-shrink-0" size={18} />
                       <div className="min-w-0">
@@ -730,7 +730,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                         <div className="text-white font-medium truncate text-sm">{hackathon.prizePool || 'TBA'}</div>
                       </div>
                     </div>
-                     
+
                     <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
                       <Users className="text-purple-400 flex-shrink-0" size={18} />
                       <div className="min-w-0">
@@ -738,7 +738,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                         <div className="text-white font-medium truncate text-sm">{hackathon.maxParticipants || 'Flexible'}</div>
                       </div>
                     </div>
-                     
+
                     <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
                       <Flag className="text-orange-400 flex-shrink-0" size={18} />
                       <div className="min-w-0">
@@ -750,21 +750,23 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                 </div>
 
                 {/* Registration Action for Students */}
-                {role === 'student' && !isRegistered && countdown.total > 0 && (
-                  <div className="bg-gradient-to-r from-blue-600/20 to-green-600/20 backdrop-blur rounded-xl p-4 lg:p-6 border border-blue-500/30">
-                    <div className="text-center">
-                      <h3 className="text-lg lg:text-xl font-bold text-white mb-2">Ready to Join?</h3>
-                      <p className="text-gray-300 mb-4 text-sm lg:text-base">Click below to register for this amazing hackathon!</p>
-                      <button
-                        onClick={handleRegisterNow}
-                        className="inline-flex items-center gap-2 px-6 lg:px-8 py-2 lg:py-3 bg-gradient-to-r from-blue-600 to-green-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-green-700 transition-all duration-200 shadow-lg text-sm lg:text-base"
-                      >
-                        <ExternalLink size={18} />
-                        Register Now
-                      </button>
+                {role === 'student'
+                  // && !isRegistered 
+                  && countdown.total > 0 && (
+                    <div className="bg-gradient-to-r from-blue-600/20 to-green-600/20 backdrop-blur rounded-xl p-4 lg:p-6 border border-blue-500/30">
+                      <div className="text-center">
+                        <h3 className="text-lg lg:text-xl font-bold text-white mb-2">Ready to Join?</h3>
+                        <p className="text-gray-300 mb-4 text-sm lg:text-base">Click below to register for this amazing hackathon!</p>
+                        <button
+                          onClick={handleRegisterNow}
+                          className="inline-flex items-center gap-2 px-6 lg:px-8 py-2 lg:py-3 bg-gradient-to-r from-blue-600 to-green-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-green-700 transition-all duration-200 shadow-lg text-sm lg:text-base"
+                        >
+                          <ExternalLink size={18} />
+                          Register Now
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </div>
 
               {/* Right Column - Stats & Actions - Fixed Width */}
@@ -845,7 +847,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400">Created</span>
                       <span className="text-white truncate ml-2">
-                        {hackathon.createdAt 
+                        {hackathon.createdAt
                           ? new Date(hackathon.createdAt).toLocaleDateString()
                           : 'Recently'
                         }
