@@ -38,6 +38,7 @@ HackHub/
 ## ✨ Features
 
 ### Faculty Interface
+
 - **Hackathon Management**: Create, edit, and delete hackathon posts
 - **Dynamic Content Control**: Full control over hackathon information
 - **Detailed Analytics**: Track impressions, registrations, and student engagement
@@ -45,6 +46,7 @@ HackHub/
 - **Visual Analytics**: Graphical representations of engagement trends
 
 ### Student Interface
+
 - **Personalized Profiles**: Create accounts with essential information
 - **Curated Hackathon List**: View all available hackathons in real-time
 - **Engagement Tracking**: Automatic impression counting
@@ -54,6 +56,7 @@ HackHub/
 ## 🛠️ Tech Stack
 
 ### Backend
+
 - **Runtime**: Node.js with Express.js
 - **Database**: MongoDB with Mongoose ODM
 - **Authentication**: JWT tokens with bcryptjs
@@ -62,6 +65,7 @@ HackHub/
 - **Validation**: Express-validator
 
 ### Frontend
+
 - **Framework**: React.js with modern hooks
 - **Styling**: Tailwind CSS with custom components
 - **Icons**: Lucide React
@@ -73,11 +77,13 @@ HackHub/
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Node.js >= 16.0.0
 - npm >= 8.0.0
 - MongoDB (local or cloud)
 
 ### 1. Clone and Install
+
 ```bash
 git clone <repository-url>
 cd HackHub
@@ -89,6 +95,7 @@ npm run install-all
 Create `.env` files in both `server/` and `client/` directories:
 
 **Server Environment (`server/.env`):**
+
 ```env
 MONGODB_URI=your_mongodb_connection_string
 JWT_SECRET=your_jwt_secret_key
@@ -100,12 +107,14 @@ NODE_ENV=development
 ```
 
 **Client Environment (`client/.env`):**
+
 ```env
 REACT_APP_API_URL=http://localhost:5000/api
 REACT_APP_GOOGLE_CLIENT_ID=your_google_client_id
 ```
 
 ### 3. Start Development Servers
+
 ```bash
 # Start both backend and frontend
 npm run dev
@@ -116,6 +125,7 @@ npm run client    # Frontend only (port 3000)
 ```
 
 ### 4. Access the Application
+
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:5000
 - **API Health Check**: http://localhost:5000/api/health
@@ -123,6 +133,7 @@ npm run client    # Frontend only (port 3000)
 ## 📁 Development Commands
 
 ### Root Level (Workspace Manager)
+
 ```bash
 npm run dev              # Start both servers
 npm run install-all      # Install all dependencies
@@ -131,6 +142,7 @@ npm run lint             # Lint both projects
 ```
 
 ### Backend Only
+
 ```bash
 cd server
 npm run dev              # Start with nodemon
@@ -140,6 +152,7 @@ npm run lint             # Lint backend code
 ```
 
 ### Frontend Only
+
 ```bash
 cd client
 npm start                # Start development server
@@ -151,24 +164,28 @@ npm run lint             # Lint frontend code
 ## 🔧 API Endpoints
 
 ### Authentication
+
 - `POST /api/auth/register` - User registration
 - `POST /api/auth/login` - User login
 - `GET /api/auth/profile` - Get user profile
 - `PUT /api/auth/profile` - Update user profile
 
 ### Hackathons (Faculty)
+
 - `POST /api/hackathons` - Create hackathon
 - `GET /api/hackathons` - Get all hackathons
 - `PUT /api/hackathons/:id` - Update hackathon
 - `DELETE /api/hackathons/:id` - Delete hackathon
 
 ### Students
+
 - `GET /api/hackathons/student` - Get hackathons for students
 - `POST /api/hackathons/:id/register` - Register for hackathon
 - `GET /api/students/profile` - Get student profile
 - `PUT /api/students/profile` - Update student profile
 
 ### Analytics
+
 - `GET /api/analytics/hackathon/:id` - Get hackathon analytics
 - `GET /api/analytics/overview` - Get faculty overview
 - `GET /api/analytics/student-engagement` - Get student engagement data
@@ -176,6 +193,7 @@ npm run lint             # Lint frontend code
 ## 🚀 Deployment
 
 ### Backend Deployment
+
 ```bash
 cd server
 npm install --production
@@ -183,6 +201,7 @@ npm start
 ```
 
 ### Frontend Deployment
+
 ```bash
 cd client
 npm run build

@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const { auth, requireAnyRole } = require('../middleware/auth');
+const googleAuthService = require('../services/googleAuth');
 
 const router = express.Router();
 
@@ -32,12 +33,22 @@ router.post('/register', [
 
     const { name, email, password, role, department, year, registrationNumber, facultyId, secondaryEmail, personalDescription } = req.body;
 
+    console.log("Raw email:", req.body.email);
+    console.log("After validation:", email);
+    console.log("Registration number:", registrationNumber);
+    console.log("Faculty ID:", facultyId);
+
+    console.log("Mongo query:", {
+      $or: [{ email }, { registrationNumber }, { facultyId }].filter(Boolean)
+    });
+
     // Check if user already exists
-    const existingUser = await User.findOne({ 
+    const existingUser = await User.findOne({
       $or: [{ email }, { registrationNumber }, { facultyId }].filter(Boolean)
     });
 
     if (existingUser) {
+      console.log({ name, email, password, role, department, year, registrationNumber, facultyId, secondaryEmail, personalDescription }, existingUser)
       return res.status(400).json({ error: 'User already exists with this email, registration number, or faculty ID' });
     }
 
@@ -164,27 +175,86 @@ router.put('/profile', auth, requireAnyRole, [
   }
 });
 
-// Google OAuth token storage (for email monitoring)
-router.post('/google-tokens', auth, requireAnyRole, async (req, res) => {
-  try {
-    const { accessToken, refreshToken, expiry } = req.body;
+// // routes/auth.js
+// const { google } = require('googleapis');
 
-    if (!accessToken || !refreshToken) {
+// const oauth2Client = new google.auth.OAuth2(
+//   process.env.GOOGLE_CLIENT_ID,
+//   process.env.GOOGLE_CLIENT_SECRET,
+//   "http://localhost:5000/api/auth/google/callback" // must match Google Console
+// );
+
+router.get('/google/callback', async (req, res) => {
+  const { code, state: userId } = req.query;
+  if (!code) {
+    return res.status(400).send('No code provided');
+  }
+
+
+  try {
+    const { access_token, refresh_token, expiry_date } = await googleAuthService.getTokensFromCode(code);
+
+    if (!access_token || !refresh_token) {
       return res.status(400).json({ error: 'Access token and refresh token are required' });
     }
 
-    await User.findByIdAndUpdate(req.user._id, {
-      googleAccessToken: accessToken,
-      googleRefreshToken: refreshToken,
-      googleTokenExpiry: expiry ? new Date(expiry) : null
-    });
-
-    res.json({ message: 'Google tokens stored successfully' });
+    console.log(
+      await User.findByIdAndUpdate(
+        userId,
+        {
+          $set: {
+            'google.accessToken': access_token,
+            'google.refreshToken': refresh_token,
+            'google.tokenExpiry': expiry_date ? new Date(expiry_date) : null,
+            'google.linkedAt': new Date()
+          }
+        },
+        { new: true } // return updated doc instead of old one
+      )
+    );
+    res.redirect("http://localhost:3000/auth/google/callback");
   } catch (error) {
     console.error('Google tokens storage error:', error);
     res.status(500).json({ error: 'Failed to store Google tokens' });
   }
+
+  // try {
+  //   const { tokens } = await oauth2Client.getToken(code);
+  //   console.log('Tokens:', tokens);
+
+  //   // TODO: save tokens in DB with userId
+  //   // e.g. await User.findByIdAndUpdate(userId, { googleTokens: tokens });
+
+  //   // Redirect user back to frontend after success
+  //   res.redirect('http://localhost:3000/registration-confirmation?success=true');
+  // } catch (err) {
+  //   console.error('Token exchange error:', err);
+  //   res.redirect('http://localhost:3000/registration-confirmation?success=false');
+  // }
 });
+
+
+// Google OAuth token storage (for email monitoring)
+// router.post('/google-tokens', auth, requireAnyRole, async (req, res) => {
+//   try {
+//     const { accessToken, refreshToken, expiry } = req.body;
+
+//     if (!accessToken || !refreshToken) {
+//       return res.status(400).json({ error: 'Access token and refresh token are required' });
+//     }
+
+//     await User.findByIdAndUpdate(req.user._id, {
+//       googleAccessToken: accessToken,
+//       googleRefreshToken: refreshToken,
+//       googleTokenExpiry: expiry ? new Date(expiry) : null
+//     });
+
+//     res.json({ message: 'Google tokens stored successfully' });
+//   } catch (error) {
+//     console.error('Google tokens storage error:', error);
+//     res.status(500).json({ error: 'Failed to store Google tokens' });
+//   }
+// });
 
 module.exports = router;
 

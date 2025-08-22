@@ -287,14 +287,21 @@ router.post('/:id/register', auth, requireStudent, [
     try {
       if (gmailLinked) {
         await googleAuthService.startMonitoring(req.user._id, hackathon._id, emailUsed, {
-          intervalMinutes: 5,
-          totalWindowHours: 12,
-          allowedDomains: ['unstop.com'],
-          subjectRegex: /(registration|confirmed|success|welcome|you are registered|registration successful)/i
+          intervalMinutes: 1,
+          totalWindowHours: 1 / 20,
+          allowedDomains: ['citchennai.net'],
+          subjectRegex: /(bruh)/i
         });
+        // await googleAuthService.startMonitoring(req.user._id, hackathon._id, emailUsed, {
+        //   intervalMinutes: 1,
+        //   totalWindowHours: 1 / 20,
+        //   allowedDomains: ['unstop.com'],
+        //   subjectRegex: /(registration|confirmed|success|welcome|you are registered|registration successful)/i
+        // });
         monitoringStarted = true;
       } else {
-        gmailAuthUrl = googleAuthService.generateAuthUrl();
+        // console.log("User: ", req.user);
+        gmailAuthUrl = googleAuthService.generateAuthUrl(req.user._id);
       }
     } catch (monitorErr) {
       console.error('Failed to start email monitoring:', monitorErr.message);

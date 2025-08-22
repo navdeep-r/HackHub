@@ -58,6 +58,7 @@ export const AuthProvider = ({ children }) => {
       const { token, user: createdUser } = data;
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(createdUser));
+      alert(token)
       setUser(createdUser);
       toast.success('Registration successful!');
       return createdUser;
