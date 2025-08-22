@@ -288,9 +288,9 @@ router.post('/:id/register', auth, requireStudent, [
       if (gmailLinked) {
         await googleAuthService.startMonitoring(req.user._id, hackathon._id, emailUsed, {
           intervalMinutes: 1,
-          totalWindowHours: 1 / 20,
-          allowedDomains: ['citchennai.net'],
-          subjectRegex: /(bruh)/i
+          totalWindowHours: 1,
+          allowedDomains: ['emails.unstop.net'],
+          subjectRegex: /.*(registration|confirmed|success|welcome|you are registered|registration successful).*/i
         });
         // await googleAuthService.startMonitoring(req.user._id, hackathon._id, emailUsed, {
         //   intervalMinutes: 1,

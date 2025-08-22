@@ -186,6 +186,7 @@ router.put('/profile', auth, requireAnyRole, [
 
 router.get('/google/callback', async (req, res) => {
   const { code, state: userId } = req.query;
+
   if (!code) {
     return res.status(400).send('No code provided');
   }
