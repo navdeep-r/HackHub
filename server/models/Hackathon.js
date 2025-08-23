@@ -145,7 +145,7 @@ hackathonSchema.index({ createdBy: 1 });
 hackathonSchema.index({ tags: 1 });
 
 // Method to increment impressions
-hackathonSchema.methods.incrementImpression = function(studentId) {
+hackathonSchema.methods.incrementImpression = function (studentId) {
   this.impressions += 1;
   this.impressionHistory.push({
     student: studentId,
@@ -155,16 +155,16 @@ hackathonSchema.methods.incrementImpression = function(studentId) {
 };
 
 // Method to register a student
-hackathonSchema.methods.registerStudent = function(studentId, emailUsed) {
+hackathonSchema.methods.registerStudent = function (studentId, emailUsed) {
   // Check if student is already registered
   const existingRegistration = this.registeredStudents.find(
-    reg => reg.student.toString() === studentId.toString()
+    reg => reg.student.toString() === studentId.toString() && reg.confirmationStatus === "confirmed"
   );
-  
+
   if (existingRegistration) {
     throw new Error('Student already registered for this hackathon');
   }
-  
+
   this.registeredStudents.push({
     student: studentId,
     emailUsed: emailUsed
@@ -173,11 +173,11 @@ hackathonSchema.methods.registerStudent = function(studentId, emailUsed) {
 };
 
 // Method to confirm registration
-hackathonSchema.methods.confirmRegistration = function(studentId) {
+hackathonSchema.methods.confirmRegistration = function (studentId) {
   const registration = this.registeredStudents.find(
     reg => reg.student.toString() === studentId.toString()
   );
-  
+
   if (registration) {
     registration.confirmationStatus = 'confirmed';
     registration.confirmedAt = new Date();
@@ -188,12 +188,12 @@ hackathonSchema.methods.confirmRegistration = function(studentId) {
 };
 
 // Virtual for checking if hackathon is upcoming
-hackathonSchema.virtual('isUpcoming').get(function() {
+hackathonSchema.virtual('isUpcoming').get(function () {
   return new Date() < this.eventDate;
 });
 
 // Virtual for checking if registration is still open
-hackathonSchema.virtual('registrationOpen').get(function() {
+hackathonSchema.virtual('registrationOpen').get(function () {
   return new Date() < this.registrationDeadline;
 });
 

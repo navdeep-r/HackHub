@@ -270,7 +270,7 @@ router.post('/:id/register', auth, requireStudent, [
 
     // Check if student is already registered
     const existingRegistration = hackathon.registeredStudents.find(
-      reg => reg.student.toString() === req.user._id.toString()
+      reg => reg.student.toString() === req.user._id.toString() && reg.confirmationStatus === "confirmed"
     );
 
     if (existingRegistration) {
@@ -289,7 +289,7 @@ router.post('/:id/register', auth, requireStudent, [
         await googleAuthService.startMonitoring(req.user._id, hackathon._id, emailUsed, {
           intervalMinutes: 1,
           totalWindowHours: 1,
-          allowedDomains: ['emails.unstop.net'],
+          allowedDomains: ['emails.unstop.com'],
           subjectRegex: /.*(registration|confirmed|success|welcome|you are registered|registration successful).*/i
         });
         // await googleAuthService.startMonitoring(req.user._id, hackathon._id, emailUsed, {

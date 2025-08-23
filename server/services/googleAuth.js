@@ -79,6 +79,7 @@ class GoogleAuthService {
       // Create search query for confirmation emails from allowed domains
       const fromFilter = allowedDomains.map(d => `from:${d}`).join(' OR ');
       const searchQuery = `(${fromFilter}) newer_than:${Math.max(lookbackHours, 1)}h`;
+      console.log(searchQuery);
 
       const response = await gmail.users.messages.list({
         userId: 'me',
@@ -90,6 +91,7 @@ class GoogleAuthService {
       let confirmationFound = false;
 
       for (const message of messages) {
+        // console.log(message)
         const email = await gmail.users.messages.get({
           userId: 'me',
           id: message.id,
@@ -97,8 +99,10 @@ class GoogleAuthService {
           metadataHeaders: ['From', 'Subject', 'Date']
         });
 
+        // console.log(email)
+
         const headers = email.data.payload.headers;
-        console.log(headers)
+        // console.log(headers)
         const subject = headers.find(h => h.name === 'Subject')?.value || '';
         const from = headers.find(h => h.name === 'From')?.value || '';
 
