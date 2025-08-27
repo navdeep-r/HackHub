@@ -65,18 +65,22 @@ api.interceptors.response.use(
     }
 
     const { status, data } = error.response;
+    const endpoint = error.config?.url;
     
     // Handle different HTTP status codes
     switch (status) {
       case 401:
-        // Unauthorized - clear auth and redirect
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        
-        // Only redirect if not already on login page
-        if (window.location.pathname !== '/login') {
-          toast.error('Session expired. Please log in again.');
-          window.location.href = '/login';
+        // Don't auto-clear tokens for login endpoint failures
+        if (!endpoint?.includes('/auth/login')) {
+          // Unauthorized - clear auth and redirect
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          
+          // Only redirect if not already on login page
+          if (window.location.pathname !== '/login') {
+            toast.error('Session expired. Please log in again.');
+            window.location.href = '/login';
+          }
         }
         break;
         
@@ -105,7 +109,13 @@ api.interceptors.response.use(
         break;
         
       case 500:
-        toast.error('Server error - please try again later');
+        // For login endpoints, show more specific error
+        if (endpoint?.includes('/auth/login')) {
+          const loginError = data?.details || data?.error || 'Login failed - server error';
+          toast.error(loginError);
+        } else {
+          toast.error('Server error - please try again later');
+        }
         break;
         
       case 503:

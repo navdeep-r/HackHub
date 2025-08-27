@@ -31,7 +31,10 @@ const userSchema = new mongoose.Schema({
   },
   department: {
     type: String,
-    required: true,
+    required: function() {
+      // Only require department for new documents, not updates
+      return this.isNew;
+    },
     trim: true
   },
   // Student-specific fields
@@ -115,22 +118,44 @@ userSchema.pre('save', async function(next) {
 
 // Method to compare passwords
 userSchema.methods.comparePassword = async function(candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
+  try {
+    if (!candidatePassword) {
+      throw new Error('Password is required for comparison');
+    }
+    
+    if (!this.password) {
+      throw new Error('User password not found');
+    }
+    
+    console.log('Comparing password for user:', this._id);
+    const result = await bcrypt.compare(candidatePassword, this.password);
+    console.log('Password comparison result:', result);
+    return result;
+  } catch (error) {
+    console.error('Password comparison error:', error);
+    throw new Error('Password comparison failed');
+  }
 };
 
 // Method to get public profile (without sensitive data)
 userSchema.methods.getPublicProfile = function() {
-  const userObject = this.toObject();
-  delete userObject.password;
-  
-  // Remove sensitive Google OAuth data but keep basic info
-  if (userObject.google) {
-    delete userObject.google.accessToken;
-    delete userObject.google.refreshToken;
-    delete userObject.google.tokenExpiry;
+  try {
+    const userObject = this.toObject();
+    delete userObject.password;
+    
+    // Remove sensitive Google OAuth data but keep basic info
+    if (userObject.google) {
+      delete userObject.google.accessToken;
+      delete userObject.google.refreshToken;
+      delete userObject.google.tokenExpiry;
+    }
+    
+    console.log('Public profile generated for user:', userObject._id);
+    return userObject;
+  } catch (error) {
+    console.error('Error generating public profile:', error);
+    throw new Error('Failed to generate public profile');
   }
-  
-  return userObject;
 };
 
 module.exports = mongoose.model('User', userSchema);

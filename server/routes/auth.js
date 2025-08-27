@@ -10,7 +10,21 @@ const router = express.Router();
 // Generate JWT token
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_super_secret_key';
 const generateToken = (userId) => {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
+  try {
+    if (!userId) {
+      throw new Error('User ID is required for token generation');
+    }
+    
+    console.log('Generating token for user ID:', userId);
+    console.log('JWT_SECRET exists:', !!JWT_SECRET);
+    
+    const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
+    console.log('Token generated successfully');
+    return token;
+  } catch (error) {
+    console.error('Token generation error:', error);
+    throw new Error('Failed to generate authentication token');
+  }
 };
 
 // Register new user
@@ -19,7 +33,7 @@ router.post('/register', [
   body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('role').isIn(['faculty', 'student']).withMessage('Role must be faculty or student'),
-  body('department').notEmpty().withMessage('Department is required'),
+  body('department').optional().notEmpty().withMessage('Department is required'),
   // Student-specific validation
   body('year').if(body('role').equals('student')).isInt({ min: 1, max: 4 }).withMessage('Year must be between 1-4'),
   body('registrationNumber').if(body('role').equals('student')).notEmpty().withMessage('Registration number is required for students'),
@@ -58,7 +72,7 @@ router.post('/register', [
       email,
       password,
       role,
-      department,
+      department: department || 'General', // Provide default if missing
       secondaryEmail,
       personalDescription
     };
@@ -92,39 +106,75 @@ router.post('/login', [
   body('password').notEmpty().withMessage('Password is required')
 ], async (req, res) => {
   try {
+    console.log('Login attempt started for:', req.body.email);
+    
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('Validation errors:', errors.array());
       return res.status(400).json({ errors: errors.array() });
     }
 
     const { email, password } = req.body;
+    console.log('Validated email:', email);
 
     // Find user by email
+    console.log('Finding user in database...');
     const user = await User.findOne({ email });
-    if (!user || !user.isActive) {
-      return res.status(401).json({ error: 'Invalid credentials or account inactive' });
+    console.log('User found:', user ? 'Yes' : 'No');
+    
+    if (!user) {
+      console.log('User not found in database');
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    if (!user.isActive) {
+      console.log('User account is inactive');
+      return res.status(401).json({ error: 'Account inactive' });
     }
 
     // Check password
+    console.log('Checking password...');
     const isPasswordValid = await user.comparePassword(password);
+    console.log('Password valid:', isPasswordValid);
+    
     if (!isPasswordValid) {
+      console.log('Invalid password');
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     // Update last login
-    user.lastLogin = new Date();
-    await user.save();
+    console.log('Updating last login...');
+    await User.updateOne(
+      { _id: user._id },
+      { $set: { lastLogin: new Date() } }
+    );
 
+    // Generate token
+    console.log('Generating JWT token...');
     const token = generateToken(user._id);
+    console.log('Token generated successfully');
 
+    // Get public profile
+    console.log('Getting public profile...');
+    const publicProfile = user.getPublicProfile();
+    console.log('Public profile generated successfully');
+
+    console.log('Login successful for user:', user._id);
     res.json({
       message: 'Login successful',
       token,
-      user: user.getPublicProfile()
+      user: publicProfile
     });
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Login failed' });
+    console.error('Login error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    res.status(500).json({ 
+      error: 'Login failed',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 

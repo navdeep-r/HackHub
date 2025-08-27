@@ -4,31 +4,33 @@ import {
   Calendar, ExternalLink, Bell, Search, CheckCircle, Flame, BookOpen, Layers, Zap, Star, TrendingUp
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import HackathonModal from './HackathonModal';
 import AnalyticsSection from './AnalyticsSection';
+import ThemeToggle from './ThemeToggle';
 import { hackathonAPI } from '../services/api';
 
 const CATEGORY_ICONS = {
-  'AI/ML': <Zap className="inline text-cyan-400" size={18} />, 
-  'Web Dev': <Layers className="inline text-purple-400" size={18} />,
-  'Blockchain': <Star className="inline text-yellow-400" size={18} />, 
-  'IoT': <BookOpen className="inline text-green-400" size={18} />,
-  'Cybersecurity': <Bell className="inline text-pink-400" size={18} />,
-  'Data Science': <BookOpen className="inline text-orange-400" size={18} />,
-  'Game Dev': <Star className="inline text-indigo-400" size={18} />,
-  'Other': <Star className="inline text-gray-400" size={18} />,
+  'AI/ML': <Zap className="inline text-twitter-blue-400" size={18} />, 
+  'Web Dev': <Layers className="inline text-twitter-purple-400" size={18} />,
+  'Blockchain': <Star className="inline text-twitter-yellow-400" size={18} />, 
+  'IoT': <BookOpen className="inline text-twitter-green-400" size={18} />,
+  'Cybersecurity': <Bell className="inline text-twitter-red-400" size={18} />,
+  'Data Science': <BookOpen className="inline text-twitter-orange-400" size={18} />,
+  'Game Dev': <Star className="inline text-twitter-blue-300" size={18} />,
+  'Other': <Star className="inline text-twitter-dark-400" size={18} />,
 };
 
 const FILTERS = [
   { value: 'all', label: 'All', icon: <Star size={16} /> },
-  { value: 'AI/ML', label: 'AI/ML', icon: <Zap size={16} className="text-cyan-400" /> },
-  { value: 'Web Dev', label: 'Web Dev', icon: <Layers size={16} className="text-purple-400" /> },
-  { value: 'Blockchain', label: 'Blockchain', icon: <Star size={16} className="text-yellow-400" /> },
-  { value: 'IoT', label: 'IoT', icon: <BookOpen size={16} className="text-green-400" /> },
-  { value: 'Cybersecurity', label: 'Cybersecurity', icon: <Bell size={16} className="text-pink-400" /> },
-  { value: 'Data Science', label: 'Data Science', icon: <BookOpen size={16} className="text-orange-400" /> },
-  { value: 'Game Dev', label: 'Game Dev', icon: <Star size={16} className="text-indigo-400" /> },
-  { value: 'Other', label: 'Other', icon: <Star size={16} className="text-gray-400" /> },
+  { value: 'AI/ML', label: 'AI/ML', icon: <Zap size={16} className="text-twitter-blue-400" /> },
+  { value: 'Web Dev', label: 'Web Dev', icon: <Layers size={16} className="text-twitter-purple-400" /> },
+  { value: 'Blockchain', label: 'Blockchain', icon: <Star size={16} className="text-twitter-yellow-400" /> },
+  { value: 'IoT', label: 'IoT', icon: <BookOpen size={16} className="text-twitter-green-400" /> },
+  { value: 'Cybersecurity', label: 'Cybersecurity', icon: <Bell size={16} className="text-twitter-red-400" /> },
+  { value: 'Data Science', label: 'Data Science', icon: <BookOpen size={16} className="text-twitter-orange-400" /> },
+  { value: 'Game Dev', label: 'Game Dev', icon: <Star size={16} className="text-twitter-blue-300" /> },
+  { value: 'Other', label: 'Other', icon: <Star size={16} className="text-twitter-dark-400" /> },
 ];
 
 function useCountUp(target, duration = 1000) {
@@ -52,6 +54,7 @@ function useCountUp(target, duration = 1000) {
 
 const FacultyDashboard = () => {
   const { user, logout } = useAuth();
+  const { isDark, colors } = useTheme();
   const [hackathons, setHackathons] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [modalMode, setModalMode] = useState('view');
@@ -191,55 +194,74 @@ const FacultyDashboard = () => {
   });
 
   return (
-    <div className="min-h-screen bg-[#0D1117] text-white">
+    <div className="min-h-screen bg-twitter-light-50 dark:bg-twitter-dark-900 text-twitter-dark-900 dark:text-white transition-colors duration-300">
+      {/* Theme Toggle */}
+      <div className="absolute top-6 right-6 z-10">
+        <ThemeToggle />
+      </div>
+      
       {/* Header & Stats */}
-      <div className="relative bg-gradient-to-r from-[#0D1117] via-[#00AEEF]/30 to-[#20C997]/20 pb-8 pt-6 px-4 md:px-0 animate-fade-in">
+      <div className="relative bg-gradient-to-r from-twitter-light-50 dark:from-twitter-dark-900 via-twitter-blue-50 dark:via-twitter-blue-900/30 to-twitter-green-50 dark:to-twitter-green-900/20 pb-8 pt-6 px-4 md:px-0 animate-fade-in-up transition-colors duration-300">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <div>
-            <h1 className="text-3xl font-extrabold text-white">Faculty Dashboard</h1>
-            <p className="text-[#A0AEC0] mt-1">Welcome, {user?.name || 'Faculty'}</p>
+            <h1 className="text-3xl font-extrabold text-gradient-twitter mb-1">Faculty Dashboard</h1>
+            <p className="text-twitter-dark-600 dark:text-twitter-dark-300 transition-colors duration-200">
+              Welcome back, {user?.name || 'Faculty'}!
+            </p>
           </div>
           <button 
             onClick={logout}
-            className="bg-gradient-to-r from-[#00AEEF] to-[#20C997] text-white px-5 py-2 rounded-full font-bold shadow-lg hover:scale-105 hover:ring-2 hover:ring-[#5EEAD4] transition-transform"
+            className="btn-primary hover-scale"
           >
-            Logout
+            Sign Out
           </button>
         </div>
+        
         {/* Stats Cards */}
         <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 mt-8">
-          <div className="relative group cursor-pointer bg-[rgba(13,17,23,0.95)] backdrop-blur-xl border border-[#A0AEC0]/10 shadow-xl rounded-2xl p-6 flex flex-col items-center hover:shadow-2xl hover:-translate-y-1 hover:rotate-1 transition-all">
-            <div className="bg-[#00AEEF] p-3 rounded-full mb-2 shadow-lg"><BarChart3 size={28} /></div>
-            <div className="text-3xl font-bold text-white">{totalCount}</div>
-            <div className="text-sm text-[#A0AEC0] mt-1">Total</div>
+          <div className="card-hover group">
+            <div className="bg-gradient-twitter p-3 rounded-full mb-3 shadow-lg group-hover:shadow-xl transition-shadow duration-300">
+              <BarChart3 size={28} className="text-white" />
+            </div>
+            <div className="text-3xl font-bold text-twitter-dark-900 dark:text-white mb-1">{totalCount}</div>
+            <div className="text-sm text-twitter-dark-500 dark:text-twitter-dark-400">Total</div>
           </div>
-          <div className="relative group cursor-pointer bg-[rgba(13,17,23,0.95)] backdrop-blur-xl border border-[#A0AEC0]/10 shadow-xl rounded-2xl p-6 flex flex-col items-center hover:shadow-2xl hover:-translate-y-1 hover:rotate-1 transition-all">
-            <div className="bg-[#5EEAD4] p-3 rounded-full mb-2 shadow-lg"><Eye size={28} /></div>
-            <div className="text-3xl font-bold text-white">{impressionsCount}</div>
-            <div className="text-sm text-[#A0AEC0] mt-1">Impressions</div>
+          
+          <div className="card-hover group">
+            <div className="bg-gradient-to-r from-twitter-purple-500 to-twitter-blue-500 p-3 rounded-full mb-3 shadow-lg group-hover:shadow-xl transition-shadow duration-300">
+              <Eye size={28} className="text-white" />
+            </div>
+            <div className="text-3xl font-bold text-twitter-dark-900 dark:text-white mb-1">{impressionsCount}</div>
+            <div className="text-sm text-twitter-dark-500 dark:text-twitter-dark-400">Impressions</div>
           </div>
-          <div className="relative group cursor-pointer bg-[rgba(13,17,23,0.95)] backdrop-blur-xl border border-[#A0AEC0]/10 shadow-xl rounded-2xl p-6 flex flex-col items-center hover:shadow-2xl hover:-translate-y-1 hover:rotate-1 transition-all">
-            <div className="bg-[#20C997] p-3 rounded-full mb-2 shadow-lg"><UserCheck size={28} /></div>
-            <div className="text-3xl font-bold text-white">{registrationsCount}</div>
-            <div className="text-sm text-[#A0AEC0] mt-1">Registrations</div>
+          
+          <div className="card-hover group">
+            <div className="bg-gradient-success p-3 rounded-full mb-3 shadow-lg group-hover:shadow-xl transition-shadow duration-300">
+              <UserCheck size={28} className="text-white" />
+            </div>
+            <div className="text-3xl font-bold text-twitter-dark-900 dark:text-white mb-1">{registrationsCount}</div>
+            <div className="text-sm text-twitter-dark-500 dark:text-twitter-dark-400">Registrations</div>
           </div>
-          <div className="relative group cursor-pointer bg-[rgba(13,17,23,0.95)] backdrop-blur-xl border border-[#A0AEC0]/10 shadow-xl rounded-2xl p-6 flex flex-col items-center hover:shadow-2xl hover:-translate-y-1 hover:rotate-1 transition-all">
-            <div className="bg-gradient-to-r from-orange-500 to-pink-500 p-3 rounded-full mb-2 shadow-lg"><Flame size={28} /></div>
-            <div className="text-3xl font-bold text-white">{newCount}</div>
-            <div className="text-sm text-[#A0AEC0] mt-1">New</div>
+          
+          <div className="card-hover group">
+            <div className="bg-gradient-warning p-3 rounded-full mb-3 shadow-lg group-hover:shadow-xl transition-shadow duration-300">
+              <Flame size={28} className="text-white" />
+            </div>
+            <div className="text-3xl font-bold text-twitter-dark-900 dark:text-white mb-1">{newCount}</div>
+            <div className="text-sm text-twitter-dark-500 dark:text-twitter-dark-400">New</div>
           </div>
         </div>
       </div>
       
       {/* Tab Navigation */}
       <div className="max-w-7xl mx-auto px-4 mt-4">
-        <div className="flex gap-1 bg-[rgba(13,17,23,0.95)] rounded-lg p-1 border border-[#A0AEC0]/10">
+        <div className="flex gap-1 bg-twitter-light-100 dark:bg-twitter-dark-800 rounded-xl p-1 border border-twitter-light-200 dark:border-twitter-dark-700 transition-colors duration-200">
           <button
             onClick={() => setActiveTab('hackathons')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
               activeTab === 'hackathons'
-                ? 'bg-gradient-to-r from-[#00AEEF] to-[#20C997] text-white shadow-lg'
-                : 'text-[#A0AEC0] hover:text-white hover:bg-white/5'
+                ? 'bg-gradient-twitter text-white shadow-md'
+                : 'text-twitter-dark-600 dark:text-twitter-dark-300 hover:text-twitter-blue-500 dark:hover:text-twitter-blue-400 hover:bg-twitter-light-200 dark:hover:bg-twitter-dark-700'
             }`}
           >
             <Calendar size={16} />
@@ -247,10 +269,10 @@ const FacultyDashboard = () => {
           </button>
           <button
             onClick={() => setActiveTab('analytics')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
               activeTab === 'analytics'
-                ? 'bg-gradient-to-r from-[#00AEEF] to-[#20C997] text-white shadow-lg'
-                : 'text-[#A0AEC0] hover:text-white hover:bg-white/5'
+                ? 'bg-gradient-twitter text-white shadow-md'
+                : 'text-twitter-dark-600 dark:text-twitter-dark-300 hover:text-twitter-blue-500 dark:hover:text-twitter-blue-400 hover:bg-twitter-light-200 dark:hover:bg-twitter-dark-700'
             }`}
           >
             <TrendingUp size={16} />
@@ -262,15 +284,15 @@ const FacultyDashboard = () => {
       {activeTab === 'hackathons' ? (
         <>
           {/* Search & Filter Row */}
-          <div className="max-w-7xl mx-auto px-4 mt-8 flex flex-col md:flex-row gap-4 items-center animate-fade-in">
+          <div className="max-w-7xl mx-auto px-4 mt-8 flex flex-col md:flex-row gap-4 items-center animate-fade-in-up">
             <div className="relative w-full md:w-1/2">
-              <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#00AEEF]" />
+              <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-twitter-blue-500 dark:text-twitter-blue-400" />
               <input
                 type="text"
                 placeholder="Search hackathons..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 rounded-full bg-[rgba(13,17,23,0.95)] border-none text-white focus:ring-2 focus:ring-[#00AEEF] placeholder:text-[#A0AEC0] shadow"
+                className="input-field pl-10"
               />
             </div>
             <div className="flex gap-2 flex-wrap mt-2 md:mt-0">
@@ -278,7 +300,15 @@ const FacultyDashboard = () => {
                 <button
                   key={f.value}
                   onClick={() => setFilterCategory(f.value)}
-                  className={`flex items-center gap-1 px-4 py-2 rounded-full font-semibold shadow transition-all border border-[#00AEEF]/20 ${filterCategory === f.value ? 'bg-gradient-to-r from-[#00AEEF] to-[#20C997] text-white scale-105' : 'bg-[rgba(13,17,23,0.95)] text-[#00AEEF] hover:scale-105'}`}
+                  className={`
+                    flex items-center gap-1 px-4 py-2 rounded-full font-semibold 
+                    transition-all duration-200 border hover-scale
+                    ${
+                      filterCategory === f.value 
+                        ? 'bg-gradient-twitter text-white shadow-md border-twitter-blue-500' 
+                        : 'bg-twitter-light-100 dark:bg-twitter-dark-700 text-twitter-blue-500 dark:text-twitter-blue-400 border-twitter-light-300 dark:border-twitter-dark-600 hover:bg-twitter-light-200 dark:hover:bg-twitter-dark-600'
+                    }
+                  `}
                 >
                   {f.icon} {f.label}
                 </button>
@@ -287,76 +317,82 @@ const FacultyDashboard = () => {
           </div>
           
           {/* Hackathons List */}
-          <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 md:gap-8 mt-10 pb-20 animate-fade-in px-4">
+          <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 md:gap-8 mt-10 pb-20 animate-fade-in-up px-4">
             {filteredHackathons.map((hackathon) => (
               <div
                 key={hackathon.id}
-                className="relative group bg-[rgba(13,17,23,0.95)] backdrop-blur-xl border border-[#A0AEC0]/10 shadow-2xl rounded-2xl p-4 md:p-6 hover:shadow-3xl hover:-translate-y-2 hover:scale-105 transition-all cursor-pointer h-[420px] flex flex-col"
+                className="card-hover group h-[420px] flex flex-col hover-glow"
               >
                 {/* Views chip */}
-                <div className="absolute top-4 right-4 bg-[#0D1117] px-3 py-1 rounded-full flex items-center gap-1 text-[#5EEAD4] text-xs shadow z-10">
+                <div className="absolute top-4 right-4 bg-twitter-light-100 dark:bg-twitter-dark-800 px-3 py-1 rounded-full flex items-center gap-1 text-twitter-blue-500 dark:text-twitter-blue-400 text-xs shadow-md z-10 transition-colors duration-200">
                   <Eye size={14} /> {hackathon.impressions || 0}
                 </div>
-                {/* Badges */}
+                
+                {/* Status Badges */}
                 <div className="flex gap-2 mb-3 flex-wrap">
                   {hackathon.isNew && (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-to-r from-orange-500 to-pink-500 text-white font-bold text-xs shadow animate-pulse">
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-warning text-white font-bold text-xs shadow animate-bounce-gentle">
                       <Flame size={14} /> NEW
                     </span>
                   )}
                 </div>
-                {/* Title with fixed height and truncation */}
-                <h3 className="text-xl font-bold mb-3 text-white leading-tight overflow-hidden" style={{display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', height: '3rem'}}>
+                
+                {/* Title */}
+                <h3 className="text-xl font-bold mb-3 text-twitter-dark-900 dark:text-white leading-tight line-clamp-2 transition-colors duration-200">
                   {hackathon.title}
                 </h3>
-                {/* Description with proper fixed height and CSS truncation */}
-                <p className="text-[#A0AEC0] text-sm mb-4 leading-relaxed break-words overflow-hidden" style={{display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', height: '4.5rem'}}>
+                
+                {/* Description */}
+                <p className="text-twitter-dark-600 dark:text-twitter-dark-300 text-sm mb-4 leading-relaxed line-clamp-3 transition-colors duration-200">
                   {hackathon.description}
                 </p>
+                
                 {/* Date and Category */}
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center gap-2">
-                    <Calendar size={18} className="text-[#00AEEF] flex-shrink-0" />
-                    <span className="text-[#00AEEF] text-xs break-words">
+                    <Calendar size={18} className="text-twitter-blue-500 dark:text-twitter-blue-400 flex-shrink-0" />
+                    <span className="text-twitter-blue-600 dark:text-twitter-blue-300 text-xs transition-colors duration-200">
                       {new Date(hackathon.eventDate).toLocaleDateString()}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {CATEGORY_ICONS[hackathon.category] || <Star size={18} className="text-[#A0AEC0] flex-shrink-0" />} 
-                    <span className="text-xs text-[#00AEEF] break-words">{hackathon.category}</span>
+                    {CATEGORY_ICONS[hackathon.category] || <Star size={18} className="text-twitter-dark-400 flex-shrink-0" />} 
+                    <span className="text-xs text-twitter-dark-600 dark:text-twitter-dark-300 transition-colors duration-200">{hackathon.category}</span>
                   </div>
                 </div>
+                
                 {/* Action Buttons */}
                 <div className="flex gap-2 mt-auto pt-4 flex-wrap">
                   <button
                     onClick={() => handleViewHackathon(hackathon)}
-                    className="bg-gradient-to-r from-[#00AEEF] to-[#20C997] text-white font-bold py-2 px-4 rounded-full shadow-lg hover:scale-105 hover:shadow-2xl transition-all hover:ring-2 hover:ring-[#5EEAD4] flex-1 min-w-[120px]"
+                    className="btn-primary flex-1 min-w-[120px] hover-scale"
                   >
                     View Details
                   </button>
                   <button
                     onClick={() => handleEditHackathon(hackathon)}
-                    className="bg-[#20C997] text-white font-bold py-2 px-4 rounded-full shadow-lg hover:scale-105 hover:shadow-2xl transition-all hover:ring-2 hover:ring-[#5EEAD4] flex-1 min-w-[80px]"
+                    className="bg-gradient-success text-white font-semibold py-2 px-4 rounded-full shadow-md hover-scale transition-all flex-1 min-w-[80px] focus:ring-2 focus:ring-twitter-green-400 focus:ring-offset-2 dark:focus:ring-offset-twitter-dark-800"
                   >
                     Edit 
                   </button>
                   <button
                     onClick={() => handleDeleteHackathon(hackathon.id)}
-                    className="bg-gradient-to-r from-pink-500 to-orange-500 text-white font-bold py-2 px-3 rounded-full shadow-lg hover:scale-105 hover:shadow-2xl transition-all min-w-[80px]"
+                    className="bg-gradient-error text-white font-semibold py-2 px-3 rounded-full shadow-md hover-scale transition-all min-w-[80px] focus:ring-2 focus:ring-twitter-red-400 focus:ring-offset-2 dark:focus:ring-offset-twitter-dark-800"
                   >
                     Delete
                   </button>
                 </div>
+                
                 {/* External Link */}
-                <div className="mt-4 pt-4 border-t border-[#A0AEC0]/20">
+                <div className="mt-4 pt-4 border-t border-twitter-light-200 dark:border-twitter-dark-700 transition-colors duration-200">
                   <a 
                     href={hackathon.link} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="text-[#00AEEF] hover:text-[#5EEAD4] text-xs flex items-center gap-1 break-words"
+                    className="text-twitter-blue-500 dark:text-twitter-blue-400 hover:text-twitter-blue-600 dark:hover:text-twitter-blue-300 text-xs flex items-center gap-1 transition-colors duration-200"
                   >
                     <ExternalLink size={14} className="flex-shrink-0" /> 
-                    <span className="break-words">Visit Competition Page</span>
+                    <span>Visit Competition Page</span>
                   </a>
                 </div>
               </div>
@@ -380,8 +416,14 @@ const FacultyDashboard = () => {
       {/* Floating Create Button */}
       <button
         onClick={handleCreateHackathon}
-        className="fixed bottom-8 right-8 z-50 bg-gradient-to-r from-[#00AEEF] to-[#20C997] text-white font-bold py-4 px-8 rounded-full shadow-2xl text-lg flex items-center gap-2 animate-pulse hover:scale-105 transition-transform ring-2 ring-[#5EEAD4]"
-        style={{ boxShadow: '0 8px 32px 0 #00AEEF55' }}
+        className="
+          fixed bottom-8 right-8 z-50 bg-gradient-twitter text-white 
+          font-semibold py-4 px-6 rounded-full shadow-2xl text-lg 
+          flex items-center gap-2 hover-scale hover-glow
+          focus:outline-none focus:ring-2 focus:ring-twitter-blue-400 focus:ring-offset-2 
+          dark:focus:ring-offset-twitter-dark-900
+          transition-all duration-300
+        "
       >
         <Plus size={24} /> Create Hackathon
       </button>

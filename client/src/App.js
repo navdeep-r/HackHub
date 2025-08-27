@@ -29,17 +29,32 @@ import LoginScreen from './components/LoginScreen';
 import FacultyDashboard from './components/FacultyDashboard';
 import StudentDashboard from './components/StudentDashboard';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { FloatingThemeToggle } from './components/ThemeToggle';
 
 const App = () => {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="App">
-          <Toaster position="top-right" />
-          <AppRoutes />
-        </div>
-      </Router>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <Router>
+          <div className="App">
+            <Toaster 
+              position="top-right"
+              toastOptions={{
+                duration: 4000,
+                style: {
+                  background: 'var(--bg-secondary)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border-light)',
+                  borderRadius: '12px',
+                },
+              }}
+            />
+            <AppRoutes />
+          </div>
+        </Router>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 
@@ -48,8 +63,8 @@ const AppRoutes = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-twitter-light-50 dark:bg-twitter-dark-900 flex items-center justify-center transition-colors duration-300">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-twitter-blue-500"></div>
       </div>
     );
   }
@@ -67,9 +82,19 @@ const MainApp = () => {
   const { user } = useAuth();
   
   if (user?.role === 'faculty') {
-    return <FacultyDashboard />;
+    return (
+      <>
+        <FacultyDashboard />
+        <FloatingThemeToggle />
+      </>
+    );
   } else if (user?.role === 'student') {
-    return <StudentDashboard />;
+    return (
+      <>
+        <StudentDashboard />
+        <FloatingThemeToggle />
+      </>
+    );
   }
   
   return <Navigate to="/login" />;

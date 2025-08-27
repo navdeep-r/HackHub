@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { BookOpen, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
+import ThemeToggle from './ThemeToggle';
 
 const LoginScreen = () => {
   const { login, register, loading } = useAuth();
+  const { isDark, colors } = useTheme();
   const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [role, setRole] = useState('student');
   const [form, setForm] = useState({
@@ -38,84 +41,235 @@ const LoginScreen = () => {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-[#0D1117] flex items-center justify-center p-6">
-      <div className="absolute inset-0 -z-10">
-        <div className="absolute -top-24 -left-24 h-72 w-72 rounded-full blur-3xl opacity-30 bg-gradient-to-br from-[#00AEEF] to-[#20C997] animate-pulse" />
-        <div className="absolute -bottom-24 -right-24 h-72 w-72 rounded-full blur-3xl opacity-30 bg-gradient-to-br from-purple-600 to-indigo-700 animate-pulse" />
+    <div className="min-h-screen relative overflow-hidden bg-twitter-light-50 dark:bg-twitter-dark-900 transition-colors duration-300 flex items-center justify-center p-6">
+      {/* Theme Toggle */}
+      <div className="absolute top-6 right-6 z-10">
+        <ThemeToggle />
       </div>
+      
+      {/* Animated Background Orbs */}
+      <div className="absolute inset-0 -z-10">
+        <div className="absolute -top-24 -left-24 h-72 w-72 rounded-full blur-3xl opacity-20 dark:opacity-10 bg-gradient-to-br from-twitter-blue-400 to-twitter-green-400 animate-pulse" />
+        <div className="absolute -bottom-24 -right-24 h-72 w-72 rounded-full blur-3xl opacity-20 dark:opacity-10 bg-gradient-to-br from-twitter-purple-500 to-twitter-blue-500 animate-pulse" />
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-96 w-96 rounded-full blur-3xl opacity-5 bg-gradient-to-br from-twitter-orange-400 to-twitter-yellow-400 animate-pulse" />
+      </div>
+      
       <div className="w-full max-w-md">
-        <div className="rounded-2xl border border-[#1F2937] bg-[rgba(13,17,23,0.9)] backdrop-blur-xl shadow-2xl p-8">
+        <div className="card glass-strong border-twitter-light-200 dark:border-twitter-dark-700 shadow-2xl">
+          {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-extrabold bg-gradient-to-r from-[#00AEEF] via-[#5EEAD4] to-[#20C997] bg-clip-text text-transparent tracking-tight">HackHub</h1>
-            <p className="text-[#A0AEC0] mt-2">Centralized Hackathon Management</p>
+            <h1 className="text-4xl font-extrabold text-gradient-twitter tracking-tight mb-2">
+              HackHub
+            </h1>
+            <p className="text-twitter-dark-500 dark:text-twitter-dark-300 transition-colors duration-200">
+              Centralized Hackathon Management
+            </p>
           </div>
+          
           <div className="space-y-6">
-            <div className="flex justify-center gap-3 mb-2">
-              <button onClick={() => setMode('login')} className={`px-4 py-2 rounded-full text-sm font-semibold ${mode === 'login' ? 'bg-[#00AEEF] text-white' : 'bg-[#111827] text-[#A0AEC0]'}`}>Login</button>
-              <button onClick={() => setMode('register')} className={`px-4 py-2 rounded-full text-sm font-semibold ${mode === 'register' ? 'bg-[#20C997] text-white' : 'bg-[#111827] text-[#A0AEC0]'}`}>Register</button>
+            {/* Mode Toggle */}
+            <div className="flex justify-center gap-1 mb-6 p-1 bg-twitter-light-100 dark:bg-twitter-dark-800 rounded-full transition-colors duration-200">
+              <button 
+                onClick={() => setMode('login')} 
+                className={`px-6 py-2 rounded-full text-sm font-semibold transition-all duration-200 ${
+                  mode === 'login' 
+                    ? 'bg-gradient-twitter text-white shadow-md' 
+                    : 'text-twitter-dark-600 dark:text-twitter-dark-400 hover:text-twitter-blue-500 dark:hover:text-twitter-blue-400'
+                }`}
+              >
+                Login
+              </button>
+              <button 
+                onClick={() => setMode('register')} 
+                className={`px-6 py-2 rounded-full text-sm font-semibold transition-all duration-200 ${
+                  mode === 'register' 
+                    ? 'bg-gradient-twitter text-white shadow-md' 
+                    : 'text-twitter-dark-600 dark:text-twitter-dark-400 hover:text-twitter-blue-500 dark:hover:text-twitter-blue-400'
+                }`}
+              >
+                Register
+              </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Role Selection for Register Mode */}
               {mode === 'register' && (
                 <div>
-                  <label className="block text-sm text-[#A0AEC0] mb-1">Role</label>
+                  <label className="block text-sm font-medium text-twitter-dark-700 dark:text-twitter-dark-300 mb-2 transition-colors duration-200">
+                    Role
+                  </label>
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => setRole('student')} className={`flex-1 px-3 py-2 rounded-lg ${role === 'student' ? 'bg-[#7C3AED] text-white' : 'bg-[#111827] text-[#A0AEC0]'}`}>Student</button>
-                    <button type="button" onClick={() => setRole('faculty')} className={`flex-1 px-3 py-2 rounded-lg ${role === 'faculty' ? 'bg-[#7C3AED] text-white' : 'bg-[#111827] text-[#A0AEC0]'}`}>Faculty</button>
+                    <button 
+                      type="button" 
+                      onClick={() => setRole('student')} 
+                      className={`flex-1 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                        role === 'student' 
+                          ? 'bg-twitter-purple-500 text-white shadow-md' 
+                          : 'bg-twitter-light-100 dark:bg-twitter-dark-700 text-twitter-dark-600 dark:text-twitter-dark-400 hover:bg-twitter-light-200 dark:hover:bg-twitter-dark-600'
+                      }`}
+                    >
+                      Student
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={() => setRole('faculty')} 
+                      className={`flex-1 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                        role === 'faculty' 
+                          ? 'bg-twitter-purple-500 text-white shadow-md' 
+                          : 'bg-twitter-light-100 dark:bg-twitter-dark-700 text-twitter-dark-600 dark:text-twitter-dark-400 hover:bg-twitter-light-200 dark:hover:bg-twitter-dark-600'
+                      }`}
+                    >
+                      Faculty
+                    </button>
                   </div>
                 </div>
               )}
 
+              {/* Name Field for Register Mode */}
               {mode === 'register' && (
                 <div>
-                  <label className="block text-sm text-[#A0AEC0] mb-1">Name</label>
-                  <input name="name" value={form.name} onChange={onChange} className="w-full p-3 rounded-lg bg-[#0B1220] border border-[#1F2937] text-white" placeholder="Your Name" />
+                  <label className="block text-sm font-medium text-twitter-dark-700 dark:text-twitter-dark-300 mb-2 transition-colors duration-200">
+                    Full Name
+                  </label>
+                  <input 
+                    name="name" 
+                    value={form.name} 
+                    onChange={onChange} 
+                    className="input-field" 
+                    placeholder="Enter your full name" 
+                    required
+                  />
                 </div>
               )}
 
+              {/* Email Field */}
               <div>
-                <label className="block text-sm text-[#A0AEC0] mb-1">Email</label>
-                <input name="email" value={form.email} onChange={onChange} type="email" className="w-full p-3 rounded-lg bg-[#0B1220] border border-[#1F2937] text-white" placeholder="you@example.com" />
+                <label className="block text-sm font-medium text-twitter-dark-700 dark:text-twitter-dark-300 mb-2 transition-colors duration-200">
+                  Email Address
+                </label>
+                <input 
+                  name="email" 
+                  value={form.email} 
+                  onChange={onChange} 
+                  type="email" 
+                  className="input-field" 
+                  placeholder="you@example.com" 
+                  required
+                />
               </div>
 
+              {/* Password Field */}
               <div>
-                <label className="block text-sm text-[#A0AEC0] mb-1">Password</label>
-                <input name="password" value={form.password} onChange={onChange} type="password" className="w-full p-3 rounded-lg bg-[#0B1220] border border-[#1F2937] text-white" placeholder="••••••••" />
+                <label className="block text-sm font-medium text-twitter-dark-700 dark:text-twitter-dark-300 mb-2 transition-colors duration-200">
+                  Password
+                </label>
+                <input 
+                  name="password" 
+                  value={form.password} 
+                  onChange={onChange} 
+                  type="password" 
+                  className="input-field" 
+                  placeholder="••••••••" 
+                  required
+                />
               </div>
 
+              {/* Additional Fields for Register Mode */}
               {mode === 'register' && (
                 <>
                   <div>
-                    <label className="block text-sm text-[#A0AEC0] mb-1">Department</label>
-                    <input name="department" value={form.department} onChange={onChange} className="w-full p-3 rounded-lg bg-[#0B1220] border border-[#1F2937] text-white" placeholder="Computer Science" />
+                    <label className="block text-sm font-medium text-twitter-dark-700 dark:text-twitter-dark-300 mb-2 transition-colors duration-200">
+                      Department
+                    </label>
+                    <input 
+                      name="department" 
+                      value={form.department} 
+                      onChange={onChange} 
+                      className="input-field" 
+                      placeholder="Computer Science" 
+                      required
+                    />
                   </div>
+                  
                   {role === 'student' ? (
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-sm text-[#A0AEC0] mb-1">Year (1-4)</label>
-                        <input name="year" value={form.year} onChange={onChange} type="number" min="1" max="4" className="w-full p-3 rounded-lg bg-[#0B1220] border border-[#1F2937] text-white" />
+                        <label className="block text-sm font-medium text-twitter-dark-700 dark:text-twitter-dark-300 mb-2 transition-colors duration-200">
+                          Year (1-4)
+                        </label>
+                        <input 
+                          name="year" 
+                          value={form.year} 
+                          onChange={onChange} 
+                          type="number" 
+                          min="1" 
+                          max="4" 
+                          className="input-field" 
+                          required
+                        />
                       </div>
                       <div>
-                        <label className="block text-sm text-[#A0AEC0] mb-1">Registration Number</label>
-                        <input name="registrationNumber" value={form.registrationNumber} onChange={onChange} className="w-full p-3 rounded-lg bg-[#0B1220] border border-[#1F2937] text-white" placeholder="REG123" />
+                        <label className="block text-sm font-medium text-twitter-dark-700 dark:text-twitter-dark-300 mb-2 transition-colors duration-200">
+                          Registration Number
+                        </label>
+                        <input 
+                          name="registrationNumber" 
+                          value={form.registrationNumber} 
+                          onChange={onChange} 
+                          className="input-field" 
+                          placeholder="REG123" 
+                          required
+                        />
                       </div>
                     </div>
                   ) : (
                     <div>
-                      <label className="block text-sm text-[#A0AEC0] mb-1">Faculty ID</label>
-                      <input name="facultyId" value={form.facultyId} onChange={onChange} className="w-full p-3 rounded-lg bg-[#0B1220] border border-[#1F2937] text-white" placeholder="FAC123" />
+                      <label className="block text-sm font-medium text-twitter-dark-700 dark:text-twitter-dark-300 mb-2 transition-colors duration-200">
+                        Faculty ID
+                      </label>
+                      <input 
+                        name="facultyId" 
+                        value={form.facultyId} 
+                        onChange={onChange} 
+                        className="input-field" 
+                        placeholder="FAC123" 
+                        required
+                      />
                     </div>
                   )}
                 </>
               )}
 
-              <button type="submit" disabled={loading} className="w-full group relative overflow-hidden rounded-lg px-6 py-3 font-semibold text-white transition-transform hover:scale-[1.02]" style={{ background: mode === 'login' ? 'linear-gradient(90deg, #00AEEF 0%, #20C997 100%)' : 'linear-gradient(90deg, #7C3AED 0%, #2563EB 100%)' }}>
-                <span className="relative z-10 inline-flex items-center gap-2">{mode === 'login' ? <BookOpen size={20} /> : <User size={20} />} {loading ? 'Please wait…' : (mode === 'login' ? 'Login' : 'Create Account')}</span>
-                <span className="absolute inset-0 opacity-0 group-hover:opacity-20 bg-white transition-opacity" />
+              {/* Submit Button */}
+              <button 
+                type="submit" 
+                disabled={loading} 
+                className={`
+                  w-full group relative overflow-hidden rounded-xl px-6 py-4 
+                  font-semibold text-white transition-all duration-300 transform
+                  ${
+                    mode === 'login' 
+                      ? 'bg-gradient-twitter hover:bg-gradient-twitter-reverse' 
+                      : 'bg-gradient-to-r from-twitter-purple-500 to-twitter-blue-500 hover:from-twitter-purple-600 hover:to-twitter-blue-600'
+                  }
+                  hover:scale-[1.02] hover:shadow-lg hover:shadow-twitter-blue-200/50 dark:hover:shadow-twitter-blue-500/25
+                  focus:outline-none focus:ring-2 focus:ring-twitter-blue-500 focus:ring-offset-2 dark:focus:ring-offset-twitter-dark-800
+                  disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none
+                `}
+              >
+                <span className="relative z-10 inline-flex items-center justify-center gap-2">
+                  {mode === 'login' ? <BookOpen size={20} /> : <User size={20} />}
+                  {loading ? 'Please wait…' : (mode === 'login' ? 'Sign In' : 'Create Account')}
+                </span>
+                <span className="absolute inset-0 opacity-0 group-hover:opacity-10 bg-white transition-opacity duration-300" />
               </button>
             </form>
           </div>
-          <div className="mt-6 text-center text-xs text-[#6B7280]">By continuing, you agree to our Terms and Privacy Policy.</div>
+          
+          {/* Footer */}
+          <div className="mt-6 text-center text-xs text-twitter-dark-500 dark:text-twitter-dark-400 transition-colors duration-200">
+            By continuing, you agree to our Terms and Privacy Policy.
+          </div>
         </div>
       </div>
     </div>
