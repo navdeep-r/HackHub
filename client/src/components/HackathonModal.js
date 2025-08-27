@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Calendar,
   Clock,
@@ -7,6 +7,7 @@ import {
   MapPin,
   Gift,
   UserCheck,
+  UserPlus,
   ExternalLink,
   X,
   Zap,
@@ -16,9 +17,11 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  CheckCircle,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { analyticsAPI, hackathonAPI } from '../services/api';
+import { analyticsAPI, hackathonAPI, studentAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
 const THEME_ICONS = {
@@ -37,30 +40,65 @@ const PHASES = [
   { label: 'Event', key: 'eventDate', icon: <Clock size={18} /> },
 ];
 
-function getTimeLeft(deadline) {
+const CATEGORIES = [
+  'AI/ML', 'Web Dev', 'Mobile App', 'Blockchain', 'IoT', 
+  'Cybersecurity', 'Data Science', 'Game Dev', 'Other'
+];
+
+const PLATFORMS = [
+  'Unstop', 'DoraHacks', 'HackerEarth', 'Devpost', 'Government', 'Others'
+];
+
+// Utility functions
+const getTimeLeft = (deadline) => {
+  if (!deadline) return { days: 0, hours: 0, mins: 0, total: 0 };
+  
   const msInMin = 60000;
   const msInHour = 3600000;
   const msInDay = 86400000;
 
   const now = Date.now();
   const end = new Date(deadline).getTime();
-  let diff = end - now;
-
-  if (diff < 0) diff = 0;
+  let diff = Math.max(0, end - now);
 
   const days = Math.floor(diff / msInDay);
   const hours = Math.floor((diff % msInDay) / msInHour);
   const mins = Math.floor((diff % msInHour) / msInMin);
 
   return { days, hours, mins, total: diff };
-}
+};
 
-const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view' }) => {
+const formatDate = (dateString) => {
+  if (!dateString) return 'TBA';
+  return new Date(dateString).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+};
+
+const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
+// Persist monitoring state to survive re-mounts for up to 5 minutes
+const getMonitorStorageKey = (hackathonId) => `monitor:${hackathonId}`;
+
+// Main Component
+const HackathonModal = ({ 
+  hackathon, 
+  onClose, 
+  onSave, 
+  onRegistered,
+  onUnregistered,
+  mode = 'view' 
+}) => {
   const { user } = useAuth();
   const role = user?.role || 'student';
-  const [formData, setFormData] = useState(hackathon || {});
-  const [countdown, setCountdown] = useState(getTimeLeft(hackathon?.registrationDeadline));
-  const [isRegistered, setIsRegistered] = useState(!!hackathon?.isRegistered);
+  
+  // State management
+  const [formData, setFormData] = useState(() => hackathon || {});
+  const [countdown, setCountdown] = useState(() => getTimeLeft(hackathon?.registrationDeadline));
+  const [isRegistered, setIsRegistered] = useState(Boolean(hackathon?.isRegistered));
   const [analytics, setAnalytics] = useState(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
   const [showRegisteredModal, setShowRegisteredModal] = useState(false);
@@ -68,116 +106,320 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
   const [gmailLinked, setGmailLinked] = useState(false);
   const [gmailAuthUrl, setGmailAuthUrl] = useState(null);
   const [pendingMonitor, setPendingMonitor] = useState(false);
+  const [confirmedRegistration, setConfirmedRegistration] = useState(false);
+  const [registrationFailed, setRegistrationFailed] = useState(false);
+  const [monitoringTimeLeft, setMonitoringTimeLeft] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortKey, setSortKey] = useState('registrationDate');
   const [sortDir, setSortDir] = useState('desc');
   const [page, setPage] = useState(1);
+  const [error, setError] = useState(null);
+
   const pageSize = 10;
+
+  // Debug state changes
+  useEffect(() => {
+    console.log('🔍 State Change:', {
+      registering,
+      pendingMonitor,
+      isRegistered,
+      confirmedRegistration,
+      registrationFailed,
+      monitoringTimeLeft
+    });
+  }, [registering, pendingMonitor, isRegistered, confirmedRegistration, registrationFailed, monitoringTimeLeft]);
+
+  // Re-hydrate monitoring state from localStorage so UI doesn't flicker back
+  useEffect(() => {
+    if (!hackathon?.id) return;
+    const key = getMonitorStorageKey(hackathon.id);
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      // consider it valid if within last 5 min
+      if (saved?.startedAt && Date.now() - saved.startedAt < 5 * 60 * 1000) {
+        setPendingMonitor(true);
+        // approximate remaining time if available
+        if (typeof saved.remainingSec === 'number') {
+          const remain = Math.max(0, saved.remainingSec - Math.floor((Date.now() - saved.savedAt) / 1000));
+          setMonitoringTimeLeft(remain);
+        }
+      } else {
+        localStorage.removeItem(key);
+      }
+    } catch { /* ignore */ }
+  }, [hackathon?.id]);
 
   // Countdown timer effect
   useEffect(() => {
-    if (!(mode === 'view' && hackathon?.registrationDeadline)) return undefined;
+    if (mode !== 'view' || !hackathon?.registrationDeadline) return;
+    
     const interval = setInterval(() => {
       setCountdown(getTimeLeft(hackathon.registrationDeadline));
     }, 1000);
+    
     return () => clearInterval(interval);
-  }, [hackathon, mode]);
+  }, [hackathon?.registrationDeadline, mode]);
 
   // Load analytics for faculty
   useEffect(() => {
     const loadAnalytics = async () => {
       if (mode !== 'view' || role !== 'faculty' || !hackathon?.id) return;
+      
       try {
         setLoadingAnalytics(true);
+        setError(null);
         const { data } = await analyticsAPI.getHackathonAnalytics(hackathon.id);
         setAnalytics(data.analytics);
       } catch (error) {
         console.error('Failed to load analytics:', error);
+        setError('Failed to load analytics data');
       } finally {
         setLoadingAnalytics(false);
       }
     };
+    
     loadAnalytics();
   }, [mode, role, hackathon?.id]);
 
-  // Student registration status
+  // Student registration status check
   useEffect(() => {
     const checkRegistrationStatus = async () => {
       if (mode !== 'view' || role !== 'student' || !hackathon?.id) return;
+      
+      // DON'T interfere with active monitoring process
+      if (pendingMonitor) {
+        console.log('Skipping status check - monitoring in progress');
+        return;
+      }
+      // If a fresh local monitor window exists, don't override UI yet
       try {
-        const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/students/registration-status/${hackathon.id}`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-          },
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        setIsRegistered(!!data.isRegistered);
+        const raw = localStorage.getItem(getMonitorStorageKey(hackathon.id));
+        if (raw) {
+          const saved = JSON.parse(raw);
+          if (saved?.startedAt && Date.now() - saved.startedAt < 5 * 60 * 1000) {
+            console.log('Skipping status check - local monitor window active');
+            return;
+          }
+        }
+      } catch {}
+      
+      try {
+        const res = await studentAPI.getRegistrationStatus(hackathon.id);
+        const status = res?.data?.registration?.confirmationStatus;
+        
+        // Only update states if we're not currently monitoring
+        if (!pendingMonitor) {
+          setIsRegistered(Boolean(res?.data?.isRegistered));
+          // Do not clear local flags unless backend explicitly reports them
+          setConfirmedRegistration(prev => (status === 'confirmed' ? true : prev));
+          setRegistrationFailed(prev => (status === 'failed' ? true : prev));
+        }
       } catch (error) {
         console.error('Failed to check registration status:', error);
       }
     };
+    
     checkRegistrationStatus();
-  }, [mode, role, hackathon?.id]);
+  }, [mode, role, hackathon?.id, pendingMonitor]); // Added pendingMonitor dependency
 
-  const handleRegisterNow = async () => {
+  // Poll for confirmation status when monitoring
+  useEffect(() => {
+    if (role !== 'student' || !pendingMonitor || !hackathon?.id) {
+      console.log('🔵 Polling useEffect skipped - role:', role, 'pendingMonitor:', pendingMonitor, 'hackathonId:', hackathon?.id);
+      return;
+    }
+    
+    console.log('🟢 Starting polling for confirmation - hackathon:', hackathon.id);
+    
+    let cancelled = false;
+    let attempts = 0;
+    let pollInterval = null;
+    const maxAttempts = 10; // 5 minutes at 30s interval
+    const totalTime = 5 * 60; // 5 minutes in seconds
+    setMonitoringTimeLeft(totalTime);
+    
+    // Countdown timer
+    const countdownInterval = setInterval(() => {
+      setMonitoringTimeLeft(prev => {
+        const newTime = prev - 1;
+        if (newTime <= 0) {
+          clearInterval(countdownInterval);
+          return 0;
+        }
+        // persist remaining seconds occasionally
+        try {
+          const key = getMonitorStorageKey(hackathon.id);
+          localStorage.setItem(key, JSON.stringify({ startedAt: Date.now() - (300 - newTime) * 1000, savedAt: Date.now(), remainingSec: newTime }));
+        } catch { /* ignore */ }
+        return newTime;
+      });
+    }, 1000);
+    
+    // Function to check status
+    const checkStatus = async () => {
+      if (cancelled) return;
+      
+      attempts += 1;
+      console.log(`🟡 Polling attempt ${attempts}/${maxAttempts} for hackathon ${hackathon.id}`);
+      
+      try {
+        const res = await studentAPI.getRegistrationStatus(hackathon.id);
+        const status = res?.data?.registration?.confirmationStatus;
+        console.log('🟡 Polling response:', { status, isRegistered: res?.data?.isRegistered, cancelled });
+        
+        if (status === 'confirmed' && !cancelled) {
+          console.log('🟢 Registration confirmed! Stopping monitoring...');
+          setPendingMonitor(false);
+          setConfirmedRegistration(true);
+          setIsRegistered(true);
+          setRegistrationFailed(false);
+          setMonitoringTimeLeft(0);
+          toast.success('Registration confirmed via email.');
+          if (onRegistered) onRegistered(hackathon.id);
+          if (pollInterval) clearInterval(pollInterval);
+          clearInterval(countdownInterval);
+          try { localStorage.removeItem(getMonitorStorageKey(hackathon.id)); } catch {}
+          return;
+        } else if (status === 'failed' && !cancelled && attempts >= 3) {
+          // Only fail after at least 3 attempts (1.5 minutes)
+          console.log('🔴 Registration failed - confirmation not found after multiple attempts');
+          setPendingMonitor(false);
+          setRegistrationFailed(true);
+          setMonitoringTimeLeft(0);
+          toast.error('Confirmation email not found after multiple checks.');
+          if (pollInterval) clearInterval(pollInterval);
+          clearInterval(countdownInterval);
+          try { localStorage.removeItem(getMonitorStorageKey(hackathon.id)); } catch {}
+          return;
+        } else if (attempts >= maxAttempts && !cancelled) {
+          console.log('🔴 Registration timeout - max attempts reached');
+          setPendingMonitor(false);
+          setRegistrationFailed(true);
+          setMonitoringTimeLeft(0);
+          toast.error('Registration confirmation not found within 5 minutes. Please check your email manually or try again.');
+          if (pollInterval) clearInterval(pollInterval);
+          clearInterval(countdownInterval);
+          try { localStorage.removeItem(getMonitorStorageKey(hackathon.id)); } catch {}
+          return;
+        }
+      } catch (error) {
+        console.error('🔴 Polling error:', error);
+        // Only fail on repeated errors, not just one
+        if (attempts >= 3 && !cancelled) {
+          setPendingMonitor(false);
+          setRegistrationFailed(true);
+          setMonitoringTimeLeft(0);
+          toast.error('Failed to verify registration after multiple attempts. Please try again.');
+          if (pollInterval) clearInterval(pollInterval);
+          clearInterval(countdownInterval);
+          try { localStorage.removeItem(getMonitorStorageKey(hackathon.id)); } catch {}
+          return;
+        }
+      }
+    };
+    
+    // Wait 15 seconds before first check to give backend time to start monitoring
+    const initialTimeout = setTimeout(() => {
+      if (!cancelled) {
+        checkStatus(); // First check
+        // Then check every 30 seconds
+        pollInterval = setInterval(checkStatus, 30000);
+      }
+    }, 15000); // Initial delay of 15 seconds
+    
+    return () => {
+      console.log('🔴 Cleaning up polling intervals');
+      cancelled = true;
+      clearTimeout(initialTimeout);
+      if (pollInterval) clearInterval(pollInterval);
+      clearInterval(countdownInterval);
+      setMonitoringTimeLeft(0);
+  try { localStorage.removeItem(getMonitorStorageKey(hackathon.id)); } catch {}
+    };
+  }, [role, pendingMonitor, hackathon?.id]);
+
+  // Event handlers
+  const handleRegisterNow = useCallback(async () => {
+    if (!hackathon?.id || !user?.email) return;
+
+    // show immediate feedback
+    const toastId = toast.loading('Wait — registration submitted. Waiting until confirmed (up to 5 minutes)...');
+
     try {
+      console.log('🟡 Starting registration process...');
       setRegistering(true);
-      const { data } = await hackathonAPI.registerForHackathon(hackathon.id, { emailUsed: user?.email });
+      setRegistrationFailed(false);
+      setMonitoringTimeLeft(0);
+      // Optimistically mark monitoring active to avoid races with status checks
+      setPendingMonitor(true);
+      try {
+        const key = getMonitorStorageKey(hackathon.id);
+        localStorage.setItem(key, JSON.stringify({ startedAt: Date.now(), savedAt: Date.now(), remainingSec: 300 }));
+      } catch { /* ignore storage errors */ }
+
+      const { data } = await hackathonAPI.registerForHackathon(hackathon.id, {
+        emailUsed: user.email,
+      });
+
+      console.log('🟡 Registration API call successful, response:', data);
+
       setGmailLinked(Boolean(data.gmailLinked));
       setGmailAuthUrl(data.gmailAuthUrl || null);
-      setPendingMonitor(!data.monitoringStarted);
-      setIsRegistered(true);
-      toast.success('Registered. We will confirm via email if a confirmation is received.');
+
+  // monitoring already set active above; this log confirms
+  console.log('🟡 Monitoring active - polling effect should start...');
+
+      // replace loading with a nicer message
+      toast.success('Registration submitted — checking for confirmation.', { id: toastId });
+
+      // if they need to link Gmail, open the auth url but keep monitoring active
       if (!data.gmailLinked && data.gmailAuthUrl) {
-        toast('Please link Gmail to allow confirmation check.', { icon: '📧' });
-        // Optionally open in new tab
-        window.open(data.gmailAuthUrl, '_blank', 'noopener');
+        toast('Please link your Gmail to enable automatic confirmation checks.', { icon: '📧' });
+        window.open(data.gmailAuthUrl, '_blank', 'noopener,noreferrer');
       }
-      if (typeof onRegistered === 'function') {
-        onRegistered(hackathon.id);
-      }
+      // do NOT mark isRegistered until we get explicit confirmation
+      console.log('🟡 Registration process complete, monitoring should now be active');
     } catch (error) {
-      console.error('Registration failed:', error);
-      toast.error(error?.response?.data?.error || 'Registration failed');
+      toast.dismiss(toastId); // clear loading toast if any
+      console.error('🔴 Registration failed:', error);
+      const errorMessage = error?.response?.data?.error || 'Registration failed. Please try again.';
+      toast.error(errorMessage);
+      // ensure monitor is turned off on error
+      setPendingMonitor(false);
+      setRegistrationFailed(true);
+      try {
+        const key = getMonitorStorageKey(hackathon.id);
+        localStorage.removeItem(key);
+      } catch { /* ignore */ }
     } finally {
+      console.log('🟡 Setting registering to false');
       setRegistering(false);
     }
-  };
+  }, [hackathon?.id, user?.email]);
 
-  // Poll for confirmation status when pendingMonitor
-  useEffect(() => {
-    if (!(role === 'student' && isRegistered && pendingMonitor)) return undefined;
-    let cancelled = false;
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/students/registration-status/${hackathon.id}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        const status = data?.registration?.confirmationStatus;
-        if (status === 'confirmed') {
-          if (!cancelled) {
-            setPendingMonitor(false);
-            toast.success('Registration confirmed via email.');
-          }
-          clearInterval(interval);
-        }
-        if (status === 'failed') {
-          if (!cancelled) {
-            setPendingMonitor(false);
-            toast('No confirmation email found within the window.', { icon: '⏳' });
-          }
-          clearInterval(interval);
-        }
-      } catch (_) { }
-    }, 30 * 1000); // poll every 30s
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [role, isRegistered, pendingMonitor, hackathon?.id]);
+  
+     
+  const handleFormChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  }, []);
 
-  const handleExportCSV = () => {
-    if (!analytics?.registeredStudents) return;
+  const handleSave = useCallback(() => {
+    if (!formData.title?.trim()) {
+      setError('Title is required');
+      return;
+    }
+    onSave?.(formData);
+  }, [formData, onSave]);
+
+  const handleExportCSV = useCallback(() => {
+    if (!analytics?.registeredStudents?.length) {
+      toast.error('No data to export');
+      return;
+    }
+
     const rows = analytics.registeredStudents.map((r) => ({
       Name: r.student?.name || '',
       Email: r.student?.email || '',
@@ -187,31 +429,48 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
       EmailUsed: r.emailUsed || '',
       Status: r.confirmationStatus || '',
     }));
+
     const headers = Object.keys(rows[0] || {});
-    const escapeCsv = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const csv = [headers.join(','), ...rows.map(r => headers.map(h => escapeCsv(r[h])).join(','))].join('\n');
+    const csv = [
+      headers.join(','),
+      ...rows.map(r => headers.map(h => escapeCsv(r[h])).join(','))
+    ].join('\n');
+
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `${(hackathon.title || 'hackathon').replace(/\s+/g, '_')}_registrations.csv`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  };
+    
+    toast.success('CSV exported successfully');
+  }, [analytics?.registeredStudents, hackathon.title]);
 
-  // Filtered and paginated students
+  const handleSort = useCallback((key) => {
+    setSortDir(current => sortKey === key ? (current === 'asc' ? 'desc' : 'asc') : 'asc');
+    setSortKey(key);
+  }, [sortKey]);
+
+  // Memoized computations
   const registeredStudents = useMemo(() => analytics?.registeredStudents || [], [analytics]);
+
   const filteredStudents = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const query = searchQuery.trim().toLowerCase();
     let filtered = registeredStudents;
 
-    if (q) {
+    if (query) {
       filtered = registeredStudents.filter((r) => {
-        const name = (r.student?.name || '').toLowerCase();
-        const email = (r.student?.email || '').toLowerCase();
-        const dept = (r.student?.department || '').toLowerCase();
-        const year = String(r.student?.year || '').toLowerCase();
-        return name.includes(q) || email.includes(q) || dept.includes(q) || year.includes(q);
+        const searchFields = [
+          r.student?.name,
+          r.student?.email,
+          r.student?.department,
+          String(r.student?.year)
+        ].filter(Boolean).join(' ').toLowerCase();
+        
+        return searchFields.includes(query);
       });
     }
 
@@ -233,8 +492,8 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
           valueB = b.student?.department || '';
           break;
         case 'year':
-          valueA = a.student?.year || 0;
-          valueB = b.student?.year || 0;
+          valueA = Number(a.student?.year) || 0;
+          valueB = Number(b.student?.year) || 0;
           break;
         case 'registrationDate':
           valueA = new Date(a.registrationDate || 0).getTime();
@@ -252,31 +511,53 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
 
   const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
   const currentPage = Math.min(page, totalPages);
+
   const pagedStudents = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredStudents.slice(start, start + pageSize);
-  }, [filteredStudents, currentPage]);
+  }, [filteredStudents, currentPage, pageSize]);
 
-  if (!hackathon) return null;
+  const themes = useMemo(() => {
+    return hackathon?.tags || [hackathon?.category || 'Other'];
+  }, [hackathon?.tags, hackathon?.category]);
 
-  // Progress calculation
-  const totalTime = new Date(hackathon.eventDate) - new Date(hackathon.createdAt || hackathon.registrationDeadline);
-  const timeGone = Math.max(0, new Date() - new Date(hackathon.createdAt || hackathon.registrationDeadline));
-  const progress = Math.min(100, Math.round((timeGone / totalTime) * 100));
+ const progress = useMemo(() => {
+  if (!hackathon?.eventDate || !hackathon?.registrationDeadline) return 0;
 
-  const themes = hackathon.tags || [hackathon.category || 'Other'];
+  const start = new Date(hackathon.registrationDeadline).getTime();
+  const end = new Date(hackathon.eventDate).getTime();
+  const totalTime = end - start;
+  if (totalTime <= 0) return 0;
 
-  // EDIT MODE
+  const timeGone = Math.max(0, Date.now() - start);
+  return Math.min(100, Math.round((timeGone / totalTime) * 100));
+}, [hackathon?.eventDate, hackathon?.registrationDeadline]);
+
+  const isDeadlinePassed = useMemo(() => {
+    return countdown.total <= 0;
+  }, [countdown.total]);
+
+  // Early returns for invalid states
+  if (!hackathon) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+        <div className="bg-white rounded-xl p-6 text-center">
+          <AlertCircle className="mx-auto mb-4 text-red-500" size={48} />
+          <h2 className="text-xl font-bold text-gray-800 mb-2">No Hackathon Data</h2>
+          <p className="text-gray-600 mb-4">Unable to load hackathon information.</p>
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Edit Mode Component
   if (mode === 'edit') {
-    const handleChange = (e) => {
-      const { name, value } = e.target;
-      setFormData((prev) => ({ ...prev, [name]: value }));
-    };
-
-    const handleSave = () => {
-      if (onSave) onSave(formData);
-    };
-
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
@@ -286,6 +567,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 transition-colors"
+              aria-label="Close modal"
             >
               <X size={24} />
             </button>
@@ -293,15 +575,25 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
 
           {/* Form Content */}
           <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+            {error && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+                <AlertCircle className="text-red-500 flex-shrink-0" size={20} />
+                <p className="text-red-700 text-sm">{error}</p>
+              </div>
+            )}
+
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Title <span className="text-red-500">*</span>
+                </label>
                 <input
                   name="title"
                   value={formData.title || ''}
-                  onChange={handleChange}
+                  onChange={handleFormChange}
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black bg-white"
                   placeholder="Enter hackathon title"
+                  required
                 />
               </div>
 
@@ -310,7 +602,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                 <textarea
                   name="description"
                   value={formData.description || ''}
-                  onChange={handleChange}
+                  onChange={handleFormChange}
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black bg-white"
                   placeholder="Enter hackathon description"
                   rows={4}
@@ -321,8 +613,9 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                 <label className="block text-sm font-medium text-gray-700 mb-2">Registration Link</label>
                 <input
                   name="link"
+                  type="url"
                   value={formData.link || ''}
-                  onChange={handleChange}
+                  onChange={handleFormChange}
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black bg-white"
                   placeholder="https://example.com/register"
                 />
@@ -334,18 +627,12 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                   <select
                     name="category"
                     value={formData.category || ''}
-                    onChange={handleChange}
+                    onChange={handleFormChange}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black bg-white"
                   >
-                    <option value="AI/ML">AI/ML</option>
-                    <option value="Web Dev">Web Dev</option>
-                    <option value="Mobile App">Mobile App</option>
-                    <option value="Blockchain">Blockchain</option>
-                    <option value="IoT">IoT</option>
-                    <option value="Cybersecurity">Cybersecurity</option>
-                    <option value="Data Science">Data Science</option>
-                    <option value="Game Dev">Game Dev</option>
-                    <option value="Other">Other</option>
+                    {CATEGORIES.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -354,35 +641,92 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                   <select
                     name="type"
                     value={formData.type || ''}
-                    onChange={handleChange}
+                    onChange={handleFormChange}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black bg-white"
                   >
+                    <option value="free">Free</option>
                     <option value="paid">Paid</option>
-                    <option value="unpaid">Unpaid</option>
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Registration Deadline</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Registration Deadline (Date Only)</label>
                   <input
                     type="date"
                     name="registrationDeadline"
-                    value={formData.registrationDeadline || ''}
-                    onChange={handleChange}
+                    value={formData.registrationDeadline ? new Date(formData.registrationDeadline).toISOString().slice(0, 10) : ''}
+                    onChange={handleFormChange}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black bg-white"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Event Date</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Event Date (Date Only)</label>
                   <input
                     type="date"
                     name="eventDate"
-                    value={formData.eventDate || ''}
-                    onChange={handleChange}
+                    value={formData.eventDate ? new Date(formData.eventDate).toISOString().slice(0, 10) : ''}
+                    onChange={handleFormChange}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Prize Pool</label>
+                  <input
+                    name="prizePool"
+                    type="text"
+                    value={formData.prizePool || ''}
+                    onChange={handleFormChange}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black bg-white"
+                    placeholder="e.g. $10,000 or ₹50,000"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Platform</label>
+                  <select
+                    name="platform"
+                    value={formData.platform || ''}
+                    onChange={handleFormChange}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black bg-white"
+                  >
+                    <option value="">Select Platform</option>
+                    {PLATFORMS.map(platform => (
+                      <option key={platform} value={platform}>{platform}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Min Team Size</label>
+                  <input
+                    name="teamSizeMin"
+                    type="number"
+                    min="1"
+                    value={formData.teamSizeMin || ''}
+                    onChange={handleFormChange}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black bg-white"
+                    placeholder="e.g. 1"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Max Team Size</label>
+                  <input
+                    name="teamSizeMax"
+                    type="number"
+                    min="1"
+                    value={formData.teamSizeMax || ''}
+                    onChange={handleFormChange}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black bg-white"
+                    placeholder="e.g. 4"
                   />
                 </div>
               </div>
@@ -409,7 +753,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
     );
   }
 
-  // REGISTERED STUDENTS MODAL
+  // Registered Students Modal
   if (showRegisteredModal && role === 'faculty') {
     return (
       <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4">
@@ -421,7 +765,8 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleExportCSV}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  disabled={!analytics?.registeredStudents?.length}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download size={16} />
                   Export CSV
@@ -429,6 +774,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                 <button
                   onClick={() => setShowRegisteredModal(false)}
                   className="text-gray-400 hover:text-gray-600 transition-colors"
+                  aria-label="Close modal"
                 >
                   <X size={24} />
                 </button>
@@ -440,7 +786,10 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                 <Search size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
                   value={searchQuery}
-                  onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setPage(1);
+                  }}
                   placeholder="Search by name, email, department, or year..."
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
@@ -449,6 +798,13 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                 {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''} found
               </div>
             </div>
+
+            {loadingAnalytics && (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <span className="ml-2 text-gray-600">Loading analytics...</span>
+              </div>
+            )}
           </div>
 
           {/* Table */}
@@ -467,14 +823,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                       <th
                         key={key}
                         className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors select-none"
-                        onClick={() => {
-                          if (sortKey === key) {
-                            setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-                          } else {
-                            setSortKey(key);
-                            setSortDir('asc');
-                          }
-                        }}
+                        onClick={() => handleSort(key)}
                       >
                         <div className="flex items-center gap-1">
                           {label}
@@ -490,7 +839,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {pagedStudents.map((registration, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                    <tr key={`${registration.student?.email || 'student'}-${idx}`} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
                           {registration.student?.name || '-'}
@@ -521,7 +870,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                       </td>
                     </tr>
                   ))}
-                  {pagedStudents.length === 0 && (
+                  {pagedStudents.length === 0 && !loadingAnalytics && (
                     <tr>
                       <td className="px-6 py-8 text-center text-gray-500" colSpan={5}>
                         {searchQuery ? 'No students found matching your search.' : 'No registered students yet.'}
@@ -567,7 +916,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
     );
   }
 
-  // MAIN VIEW MODE
+  // Main View Mode
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
       <div className="w-full max-w-6xl h-full max-h-[95vh] overflow-hidden">
@@ -585,12 +934,20 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
           <button
             onClick={onClose}
             className="absolute top-4 right-4 z-20 text-gray-400 hover:text-white transition-colors bg-black/20 rounded-full p-2"
+            aria-label="Close modal"
           >
             <X size={24} />
           </button>
 
-          {/* Header Section - Fixed Height */}
+          {/* Header Section */}
           <div className="p-4 lg:p-6 border-b border-gray-700 flex-shrink-0">
+            {error && (
+              <div className="mb-4 p-4 bg-red-500/20 border border-red-500 rounded-lg flex items-center gap-2">
+                <AlertCircle className="text-red-400 flex-shrink-0" size={20} />
+                <p className="text-red-300 text-sm">{error}</p>
+              </div>
+            )}
+
             <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
               {/* Title and Info */}
               <div className="flex-1 min-w-0">
@@ -602,15 +959,35 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                 </p>
 
                 {/* Registration Status for Students */}
-                {role === 'student' && isRegistered && (
-                  <div className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-green-500/20 border border-green-500 text-green-400 font-semibold text-sm">
-                    <UserCheck size={16} />
-                    You are registered
+                {role === 'student' && (isRegistered || pendingMonitor) && (
+                  <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-full font-semibold text-sm mb-3 ${
+                    pendingMonitor 
+                      ? 'bg-yellow-500/20 border border-yellow-500 text-yellow-400'
+                      : confirmedRegistration
+                        ? 'bg-green-500/20 border border-green-500 text-green-400'
+                        : 'bg-blue-500/20 border border-blue-500 text-blue-400'
+                  }`}>
+                    {pendingMonitor ? (
+                      <>
+                        <Clock size={16} className="animate-spin" />
+                        Checking confirmation...
+                      </>
+                    ) : confirmedRegistration ? (
+                      <>
+                        <CheckCircle size={16} />
+                        Registration confirmed
+                      </>
+                    ) : isRegistered ? (
+                      <>
+                        <UserCheck size={16} />
+                        You are registered
+                      </>
+                    ) : null}
                   </div>
                 )}
 
                 {/* Theme Tags */}
-                <div className="flex flex-wrap gap-2 mt-3">
+                <div className="flex flex-wrap gap-2">
                   {themes.map((theme, i) => (
                     <span
                       key={`${theme}-${i}`}
@@ -624,7 +1001,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
               </div>
 
               {/* Countdown Timer for Students */}
-              {role === 'student' && (
+              {role === 'student' && countdown.total > 0 && (
                 <div className="flex flex-col items-center lg:items-end justify-center bg-black/20 rounded-xl p-4 min-w-[240px] lg:min-w-[280px]">
                   <div className="text-gray-300 text-xs mb-2">Registration Ends In</div>
                   <div className="flex gap-1 lg:gap-2 text-xl lg:text-2xl font-mono font-bold">
@@ -662,6 +1039,32 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                   </div>
                 </div>
               )}
+
+              {/* Faculty Analytics Summary */}
+              {role === 'faculty' && (
+                <div className="flex flex-col items-center lg:items-end justify-center bg-black/20 rounded-xl p-4 min-w-[240px] lg:min-w-[280px]">
+                  <div className="text-gray-300 text-xs mb-2">Analytics</div>
+                  {loadingAnalytics ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-400"></div>
+                      <span className="text-sm text-gray-400">Loading...</span>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-white">
+                        {analytics?.registeredStudents?.length || 0}
+                      </div>
+                      <div className="text-sm text-gray-400 mb-3">Registered Students</div>
+                      <button
+                        onClick={() => setShowRegisteredModal(true)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                      >
+                        View Details
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -673,9 +1076,92 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                 {/* Full Description */}
                 <div className="bg-white/5 backdrop-blur rounded-xl p-4 lg:p-6 border border-gray-700">
                   <h3 className="text-lg lg:text-xl font-bold text-white mb-3 lg:mb-4">About This Hackathon</h3>
-                  <p className="text-gray-300 leading-relaxed whitespace-pre-wrap text-sm lg:text-base">
-                    {hackathon.description}
-                  </p>
+                  
+                  {/* Description Card */}
+                  <div className="bg-white/10 rounded-lg p-4 mb-4 border border-gray-600">
+                    <p className="text-gray-300 leading-relaxed whitespace-pre-wrap text-sm lg:text-base">
+                      {hackathon.description || 'No description available.'}
+                    </p>
+                  </div>
+
+                  {/* Key Details Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Location Card */}
+                    <div className="bg-blue-500/10 rounded-lg p-4 border border-blue-500/30">
+                      <div className="flex items-center gap-2 mb-2">
+                        <MapPin className="text-blue-400" size={18} />
+                        <span className="text-blue-400 font-semibold text-sm">Location</span>
+                      </div>
+                      <p className="text-white font-medium">{hackathon.location || 'Online'}</p>
+                    </div>
+
+                    {/* Prize Pool Card */}
+                    <div className="bg-green-500/10 rounded-lg p-4 border border-green-500/30">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Gift className="text-green-400" size={18} />
+                        <span className="text-green-400 font-semibold text-sm">Prize Pool</span>
+                      </div>
+                      <p className="text-white font-medium">{hackathon.prizePool || 'TBA'}</p>
+                    </div>
+
+                    {/* Team Size Card */}
+                    <div className="bg-purple-500/10 rounded-lg p-4 border border-purple-500/30">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Users className="text-purple-400" size={18} />
+                        <span className="text-purple-400 font-semibold text-sm">Team Size</span>
+                      </div>
+                      <p className="text-white font-medium">
+                        {hackathon.teamSizeMin && hackathon.teamSizeMax 
+                          ? `${hackathon.teamSizeMin}-${hackathon.teamSizeMax} members`
+                          : hackathon.teamSizeMin 
+                            ? `Min ${hackathon.teamSizeMin} members`
+                            : hackathon.teamSizeMax 
+                              ? `Max ${hackathon.teamSizeMax} members`
+                              : hackathon.maxParticipants || 'Flexible'
+                        }
+                      </p>
+                    </div>
+
+                    {/* Platform Card */}
+                    {hackathon.platform && (
+                      <div className="bg-indigo-500/10 rounded-lg p-4 border border-indigo-500/30">
+                        <div className="flex items-center gap-2 mb-2">
+                          <ExternalLink className="text-indigo-400" size={18} />
+                          <span className="text-indigo-400 font-semibold text-sm">Platform</span>
+                        </div>
+                        <p className="text-white font-medium">{hackathon.platform}</p>
+                      </div>
+                    )}
+
+                    {/* Type Card */}
+                    <div className="bg-orange-500/10 rounded-lg p-4 border border-orange-500/30">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Flag className="text-orange-400" size={18} />
+                        <span className="text-orange-400 font-semibold text-sm">Type</span>
+                      </div>
+                      <p className="text-white font-medium capitalize">{hackathon.type || 'Free'}</p>
+                    </div>
+
+                    {/* Category Card */}
+                    <div className="bg-cyan-500/10 rounded-lg p-4 border border-cyan-500/30">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Zap className="text-cyan-400" size={18} />
+                        <span className="text-cyan-400 font-semibold text-sm">Category</span>
+                      </div>
+                      <p className="text-white font-medium">{hackathon.category || 'General'}</p>
+                    </div>
+
+                    {/* Organizer Card */}
+                    {hackathon.organizer && (
+                      <div className="bg-yellow-500/10 rounded-lg p-4 border border-yellow-500/30">
+                        <div className="flex items-center gap-2 mb-2">
+                          <UserCheck className="text-yellow-400" size={18} />
+                          <span className="text-yellow-400 font-semibold text-sm">Organizer</span>
+                        </div>
+                        <p className="text-white font-medium">{hackathon.organizer}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Timeline */}
@@ -693,17 +1179,7 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                         <div className="flex-1">
                           <div className="text-white font-medium text-sm lg:text-base">{phase.label}</div>
                           <div className="text-gray-400 text-xs lg:text-sm">
-                            {hackathon[phase.key]
-                              ? new Date(hackathon[phase.key]).toLocaleDateString('en-US', {
-                                weekday: 'long',
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })
-                              : 'TBA'
-                            }
+                            {formatDate(hackathon[phase.key])}
                           </div>
                         </div>
                       </div>
@@ -711,148 +1187,201 @@ const HackathonModal = ({ hackathon, onClose, onSave, onRegistered, mode = 'view
                   </div>
                 </div>
 
-                {/* Event Details */}
-                <div className="bg-white/5 backdrop-blur rounded-xl p-4 lg:p-6 border border-gray-700">
-                  <h3 className="text-lg lg:text-xl font-bold text-white mb-3 lg:mb-4">Event Details</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:gap-4">
-                    <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
-                      <MapPin className="text-blue-400 flex-shrink-0" size={18} />
-                      <div className="min-w-0">
-                        <div className="text-gray-400 text-xs">Location</div>
-                        <div className="text-white font-medium truncate text-sm">{hackathon.location || 'Online'}</div>
-                      </div>
-                    </div>
+                {/* Registration Actions for Students */}
+                        {role === 'student' && countdown.total > 0 && (
+                          <div className="bg-gradient-to-r from-blue-600/20 to-green-600/20 backdrop-blur rounded-xl p-4 lg:p-6 border border-blue-500/30">
+                          <div className="text-center">
+                            <h3 className="text-lg lg:text-xl font-bold text-white mb-2">Ready to Join?</h3>
+                            <p className="text-gray-300 mb-4 text-sm lg:text-base">
+                            {isRegistered 
+                              ? 'You are already registered for this hackathon!' 
+                              : 'Click below to register for this amazing hackathon!'
+                            }
+                            </p>
+                            
+                            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                            {!isRegistered && !registrationFailed && !pendingMonitor ? (
+                              <button
+                              onClick={handleRegisterNow}
+                              disabled={registering || isDeadlinePassed}
+                              className="inline-flex items-center justify-center gap-2 px-6 lg:px-8 py-2 lg:py-3 bg-gradient-to-r from-blue-600 to-green-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-green-700 transition-all duration-200 shadow-lg text-sm lg:text-base disabled:opacity-60 disabled:cursor-not-allowed"
+                              >
+                              {registering ? (
+                                <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                Registering...
+                                </>
+                              ) : (
+                                <>
+                                <UserPlus size={18} />
+                                Register Now
+                                </>
+                              )}
+                              </button>
+                            ) : pendingMonitor ? (
+                              <button
+                                disabled
+                                className="inline-flex items-center justify-center gap-2 px-6 lg:px-8 py-2 lg:py-3 bg-amber-600 text-white font-bold rounded-lg text-sm lg:text-base uppercase cursor-not-allowed"
+                                aria-live="polite"
+                                aria-label="Checking registration confirmation"
+                              >
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                                CHECKING...
+                              </button>
 
-                    <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
-                      <Gift className="text-green-400 flex-shrink-0" size={18} />
-                      <div className="min-w-0">
-                        <div className="text-gray-400 text-xs">Prize Pool</div>
-                        <div className="text-white font-medium truncate text-sm">{hackathon.prizePool || 'TBA'}</div>
-                      </div>
-                    </div>
+                            ) : registrationFailed ? (
+                              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                              <div className="text-center">
+                                <div className="flex items-center justify-center gap-2 mb-2">
+                                <AlertCircle className="text-red-500" size={20} />
+                                <span className="text-red-500 font-semibold">Registration Failed</span>
+                                </div>
+                                <p className="text-gray-400 text-sm mb-3">
+                                Confirmation not found within 5 minutes. Please check your email or try again.
+                                </p>
+                              </div>
+                              <button
+                                onClick={handleRegisterNow}
+                                disabled={registering}
+                                className="inline-flex items-center justify-center gap-2 px-6 lg:px-8 py-2 lg:py-3 bg-gradient-to-r from-blue-600 to-green-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-green-700 transition-all duration-200 shadow-lg text-sm lg:text-base disabled:opacity-60 disabled:cursor-not-allowed"
+                              >
+                                <UserPlus size={18} />
+                                Try Again
+                              </button>
+                              </div>
+                            ) : confirmedRegistration ? (
+                              <button
+                                onClick={() => window.open(hackathon.link, '_blank', 'noopener,noreferrer')}
+                                className="inline-flex items-center justify-center gap-2 px-6 lg:px-8 py-2 lg:py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg text-sm lg:text-base"
+                              >
+                                <ExternalLink size={18} />
+                                Visit Site
+                              </button>
+                            ) : isRegistered ? (
+                              <button
+                                onClick={() => window.open(hackathon.link, '_blank', 'noopener,noreferrer')}
+                                className="inline-flex items-center justify-center gap-2 px-6 lg:px-8 py-2 lg:py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg text-sm lg:text-base"
+                              >
+                                <ExternalLink size={18} />
+                                Visit Site
+                              </button>
+                            ) : null}
+                            </div>
 
-                    <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
-                      <Users className="text-purple-400 flex-shrink-0" size={18} />
-                      <div className="min-w-0">
-                        <div className="text-gray-400 text-xs">Team Size</div>
-                        <div className="text-white font-medium truncate text-sm">{hackathon.maxParticipants || 'Flexible'}</div>
-                      </div>
-                    </div>
+                            {/* Pending monitor status */}
+                      {pendingMonitor && (
+                        <div className="mt-4 p-3 bg-blue-500/20 border border-blue-500 rounded-lg">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+                            <span className="text-blue-300 font-semibold">Checking for confirmation...</span>
+                          </div>
+                          <p className="text-blue-200 text-sm">
+                            🕐 Time remaining: {Math.floor(monitoringTimeLeft / 60)}:{(monitoringTimeLeft % 60).toString().padStart(2, '0')} minutes
+                          </p>
+                        </div>
+                      )}
 
-                    <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
-                      <Flag className="text-orange-400 flex-shrink-0" size={18} />
-                      <div className="min-w-0">
-                        <div className="text-gray-400 text-xs">Type</div>
-                        <div className="text-white font-medium capitalize truncate text-sm">{hackathon.type || 'Free'}</div>
-                      </div>
+                      {/* Gmail linking message */}
+                      {isRegistered && !gmailLinked && gmailAuthUrl && (
+                        <div className="mt-4 p-3 bg-yellow-500/20 border border-yellow-500 rounded-lg">
+                          <p className="text-yellow-300 text-sm">
+                            📧 Link your Gmail to enable automatic confirmation tracking.
+                          </p>
+                          <button
+                            onClick={() => window.open(gmailAuthUrl, '_blank', 'noopener,noreferrer')}
+                            className="mt-2 text-yellow-400 hover:text-yellow-300 underline text-sm"
+                          >
+                            Link Gmail Account
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Pending confirmation message */}
+                      {isRegistered && pendingMonitor && (
+                        <div className="mt-4 p-3 bg-blue-500/20 border border-blue-500 rounded-lg">
+                          <p className="text-blue-300 text-sm">
+                            ⏳ Monitoring your email for registration confirmation...
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
+                )}
 
-                {/* Registration Action for Students */}
-                {role === 'student'
-                  // && !isRegistered 
-                  && countdown.total > 0 && (
-                    <div className="bg-gradient-to-r from-blue-600/20 to-green-600/20 backdrop-blur rounded-xl p-4 lg:p-6 border border-blue-500/30">
-                      <div className="text-center">
-                        <h3 className="text-lg lg:text-xl font-bold text-white mb-2">Ready to Join?</h3>
-                        <p className="text-gray-300 mb-4 text-sm lg:text-base">Click below to register for this amazing hackathon!</p>
-                        <button
-                          onClick={handleRegisterNow}
-                          className="inline-flex items-center gap-2 px-6 lg:px-8 py-2 lg:py-3 bg-gradient-to-r from-blue-600 to-green-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-green-700 transition-all duration-200 shadow-lg text-sm lg:text-base"
-                        >
-                          <ExternalLink size={18} />
-                          Register Now
-                        </button>
-                      </div>
+                {/* Registration status for expired deadline */}
+                {role === 'student' && countdown.total <= 0 && (
+                  <div className="bg-gradient-to-r from-gray-600/20 to-gray-500/20 backdrop-blur rounded-xl p-4 lg:p-6 border border-gray-500/30 text-center">
+                    <div className="flex items-center justify-center gap-2 mb-3">
+                      <Clock className="text-gray-400" size={20} />
+                      <h3 className="text-lg font-bold text-gray-300">Registration Period Ended</h3>
                     </div>
-                  )}
+                    <p className="text-gray-400 text-sm mb-4">
+                      The registration deadline has passed, but you can still visit the hackathon page for updates.
+                    </p>
+                    {hackathon.link && (
+                      <button
+                        onClick={() => window.open(hackathon.link, '_blank', 'noopener,noreferrer')}
+                        className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                      >
+                        <ExternalLink size={18} />
+                        Visit Hackathon Page
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* Right Column - Stats & Actions - Fixed Width */}
-              <div className="space-y-4 lg:space-y-6">
-                {/* Engagement Stats */}
-                <div className="bg-white/5 backdrop-blur rounded-xl p-4 lg:p-6 border border-gray-700">
-                  <h3 className="text-lg lg:text-xl font-bold text-white mb-3 lg:mb-4">Engagement</h3>
-                  <div className="space-y-3 lg:space-y-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400 text-sm">Views</span>
-                      <span className="text-white font-bold text-lg lg:text-xl">{hackathon.impressions || 0}</span>
+              {/* Right Column - Sidebar */}
+              <div className="space-y-6">
+                {/* Quick Actions */}
+                {hackathon.link && (
+                  <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-gray-700">
+                    <h4 className="text-white font-bold mb-3">Quick Actions</h4>
+                    <button
+                      onClick={() => window.open(hackathon.link, '_blank', 'noopener,noreferrer')}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                    >
+                      <ExternalLink size={18} />
+                      Visit Official Site
+                    </button>
+                  </div>
+                )}
+
+                {/* Additional Info */}
+                <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-gray-700">
+                  <h4 className="text-white font-bold mb-3">Additional Information</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Created:</span>
+                      <span className="text-white">
+                        {hackathon.createdAt ? new Date(hackathon.createdAt).toLocaleDateString() : 'N/A'}
+                      </span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400 text-sm">Registrations</span>
-                      <span className="text-white font-bold text-lg lg:text-xl">{hackathon.registrations || 0}</span>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Updated:</span>
+                      <span className="text-white">
+                        {hackathon.updatedAt ? new Date(hackathon.updatedAt).toLocaleDateString() : 'N/A'}
+                      </span>
                     </div>
-                    {hackathon.impressions > 0 && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">Conversion Rate</span>
-                        <span className="text-green-400 font-bold text-sm">
-                          {((hackathon.registrations / hackathon.impressions) * 100).toFixed(1)}%
-                        </span>
+                    {hackathon.organizer && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Organizer:</span>
+                        <span className="text-white">{hackathon.organizer}</span>
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* External Link */}
-                <div className="bg-white/5 backdrop-blur rounded-xl p-4 lg:p-6 border border-gray-700">
-                  <h3 className="text-lg lg:text-xl font-bold text-white mb-3 lg:mb-4">Official Page</h3>
-                  <a
-                    href={hackathon.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 w-full justify-center px-3 lg:px-4 py-2 lg:py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors text-sm lg:text-base"
-                  >
-                    <ExternalLink size={16} />
-                    Visit Official Site
-                  </a>
-                </div>
-
-                {/* Faculty Actions */}
-                {role === 'faculty' && (
-                  <div className="bg-white/5 backdrop-blur rounded-xl p-4 lg:p-6 border border-gray-700">
-                    <h3 className="text-lg lg:text-xl font-bold text-white mb-3 lg:mb-4">Faculty Actions</h3>
-                    <div className="space-y-3">
-                      <button
-                        onClick={() => setShowRegisteredModal(true)}
-                        disabled={loadingAnalytics}
-                        className="w-full px-3 lg:px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm lg:text-base"
-                      >
-                        {loadingAnalytics ? 'Loading...' : 'View Registered Students'}
-                      </button>
-                      <button
-                        onClick={handleExportCSV}
-                        disabled={!analytics?.registeredStudents?.length}
-                        className="w-full px-3 lg:px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm lg:text-base"
-                      >
-                        <Download size={16} />
-                        Export CSV
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Additional Info */}
-                <div className="bg-white/5 backdrop-blur rounded-xl p-4 lg:p-6 border border-gray-700">
-                  <h3 className="text-lg lg:text-xl font-bold text-white mb-3 lg:mb-4">Quick Info</h3>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400">Category</span>
-                      <span className="text-white truncate ml-2">{hackathon.category}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400">Type</span>
-                      <span className="text-white capitalize truncate ml-2">{hackathon.type}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400">Created</span>
-                      <span className="text-white truncate ml-2">
-                        {hackathon.createdAt
-                          ? new Date(hackathon.createdAt).toLocaleDateString()
-                          : 'Recently'
-                        }
-                      </span>
-                    </div>
+                {/* Help & Support */}
+                <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-gray-700">
+                  <h4 className="text-white font-bold mb-3">Need Help?</h4>
+                  <div className="space-y-2 text-sm">
+                    <p className="text-gray-300">
+                      Having issues with registration or have questions about the hackathon?
+                    </p>
+                    <button className="text-blue-400 hover:text-blue-300 transition-colors">
+                      Contact Support
+                    </button>
                   </div>
                 </div>
               </div>

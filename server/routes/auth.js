@@ -175,14 +175,6 @@ router.put('/profile', auth, requireAnyRole, [
   }
 });
 
-// // routes/auth.js
-// const { google } = require('googleapis');
-
-// const oauth2Client = new google.auth.OAuth2(
-//   process.env.GOOGLE_CLIENT_ID,
-//   process.env.GOOGLE_CLIENT_SECRET,
-//   "http://localhost:5000/api/auth/google/callback" // must match Google Console
-// );
 
 router.get('/google/callback', async (req, res) => {
   const { code, state: userId } = req.query;
@@ -256,6 +248,30 @@ router.get('/google/callback', async (req, res) => {
 //     res.status(500).json({ error: 'Failed to store Google tokens' });
 //   }
 // });
+
+// Debug endpoint to check monitoring status
+router.get('/debug/monitoring', auth, async (req, res) => {
+  try {
+    const activeMonitoring = googleAuthService.getActiveMonitoring();
+    res.json({
+      activeMonitoringSessions: Array.from(activeMonitoring.keys()),
+      totalActiveSessions: activeMonitoring.size,
+      details: Object.fromEntries(
+        Array.from(activeMonitoring.entries()).map(([key, data]) => [
+          key,
+          {
+            startTime: data.startTime,
+            timeoutId: !!data.timeoutId,
+            intervalId: !!data.intervalId
+          }
+        ])
+      )
+    });
+  } catch (error) {
+    console.error('Debug monitoring error:', error);
+    res.status(500).json({ error: 'Failed to get monitoring status' });
+  }
+});
 
 module.exports = router;
 

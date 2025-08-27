@@ -76,7 +76,9 @@ router.get('/', auth, requireFaculty, async (req, res) => {
     const { page = 1, limit = 10, status } = req.query;
     const skip = (page - 1) * limit;
 
-    let query = { createdBy: req.user._id };
+  // NOTE: faculty should be able to view all hackathons across the platform.
+  // Keep filters for status only.
+  let query = {};
     if (status === 'active') query.isActive = true;
     if (status === 'inactive') query.isActive = false;
 
@@ -140,10 +142,9 @@ router.get('/student', auth, requireStudent, async (req, res) => {
 // Get single hackathon with analytics
 router.get('/:id', auth, requireFaculty, async (req, res) => {
   try {
-    const hackathon = await Hackathon.findOne({
-      _id: req.params.id,
-      createdBy: req.user._id
-    }).populate('registeredStudents.student', 'name email registrationNumber department year');
+    // Allow faculty to fetch any hackathon details for analytics purposes
+    const hackathon = await Hackathon.findById(req.params.id)
+      .populate('registeredStudents.student', 'name email registrationNumber department year');
 
     if (!hackathon) {
       return res.status(404).json({ error: 'Hackathon not found' });
@@ -321,6 +322,39 @@ router.post('/:id/register', auth, requireStudent, [
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({ error: 'Failed to register for hackathon' });
+  }
+});
+
+// Unregister student from hackathon (Student)
+router.post('/:id/unregister', auth, requireStudent, async (req, res) => {
+  try {
+    const hackathon = await Hackathon.findById(req.params.id);
+    if (!hackathon) return res.status(404).json({ error: 'Hackathon not found' });
+
+    const idx = hackathon.registeredStudents.findIndex(
+      reg => reg.student.toString() === req.user._id.toString()
+    );
+
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Registration not found' });
+    }
+
+    const wasConfirmed = hackathon.registeredStudents[idx].confirmationStatus === 'confirmed';
+
+    // Remove registration
+    hackathon.registeredStudents.splice(idx, 1);
+
+    // Decrement confirmed registrations count only if it was previously confirmed
+    if (wasConfirmed && hackathon.registrations > 0) {
+      hackathon.registrations = Math.max(0, hackathon.registrations - 1);
+    }
+
+    await hackathon.save();
+
+    res.json({ message: 'Unregistered successfully' });
+  } catch (error) {
+    console.error('Unregister error:', error);
+    res.status(500).json({ error: 'Failed to unregister' });
   }
 });
 

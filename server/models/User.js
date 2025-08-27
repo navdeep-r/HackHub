@@ -29,6 +29,11 @@ const userSchema = new mongoose.Schema({
     enum: ['faculty', 'student'],
     required: true
   },
+  department: {
+    type: String,
+    required: true,
+    trim: true
+  },
   // Student-specific fields
   year: {
     type: Number,

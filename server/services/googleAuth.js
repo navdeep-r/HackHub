@@ -1,15 +1,32 @@
 const { google } = require('googleapis');
+const path = require('path');
+// Load server .env explicitly to avoid missing vars when cwd differs
+require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
 const User = require('../models/User');
 const Hackathon = require('../models/Hackathon');
 const notifier = require('./notifier');
 
 class GoogleAuthService {
   constructor() {
-    this.oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI || 'http://localhost:5000/api/auth/google/callback'
-    );
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:5000/api/auth/google/callback';
+
+    // Track active monitoring to prevent duplicates
+    this.activeMonitoring = new Map(); // key: `${userId}_${hackathonId}`
+
+    if (!clientId || !clientSecret) {
+      console.warn('Google OAuth not fully configured: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is not set. Gmail linking will be disabled.');
+      this.oauth2Client = null;
+      this._clientIdMissing = true;
+    } else {
+      this.oauth2Client = new google.auth.OAuth2(
+        clientId,
+        clientSecret,
+        redirectUri
+      );
+      this._clientIdMissing = false;
+    }
   }
 
   // Generate authorization URL
@@ -19,13 +36,18 @@ class GoogleAuthService {
       'https://www.googleapis.com/auth/userinfo.email'
     ];
 
-    console.log("userid: ", userId)
-    return this.oauth2Client.generateAuthUrl({
+    if (!this.oauth2Client) {
+      throw new Error('Google OAuth is not configured on the server. Cannot generate auth URL.');
+    }
+
+    let url = this.oauth2Client.generateAuthUrl({
       access_type: 'offline',
       scope: scopes,
       prompt: 'consent',
-      state: userId.toString()
+      state: userId ? userId.toString() : undefined
     });
+    console.log("userid: ", userId, "url: ", url);
+    return url;
   }
 
   // Exchange code for tokens
@@ -183,6 +205,14 @@ class GoogleAuthService {
   // Start monitoring for a specific registration (every X minutes up to 12 hours)
   async startMonitoring(userId, hackathonId, emailUsed, options = {}) {
     try {
+      const monitoringKey = `${userId}_${hackathonId}`;
+      
+      // Check if monitoring is already active for this user/hackathon combination
+      if (this.activeMonitoring.has(monitoringKey)) {
+        console.log(`Monitoring already active for user ${userId}, hackathon ${hackathonId}`);
+        return true;
+      }
+
       const {
         intervalMinutes = 5,
         totalWindowHours = 12,
@@ -191,15 +221,40 @@ class GoogleAuthService {
       } = options;
 
       const startedAt = Date.now();
+      let monitoringInterval;
+      let timeoutId;
+      let isMonitoringStopped = false;
+
+      // Function to stop monitoring
+      const stopMonitoring = (reason = 'unknown') => {
+        if (!isMonitoringStopped) {
+          isMonitoringStopped = true;
+          if (monitoringInterval) {
+            clearInterval(monitoringInterval);
+          }
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+          // Remove from active monitoring tracker
+          this.activeMonitoring.delete(monitoringKey);
+          console.log(`Monitoring stopped for user ${userId}, hackathon ${hackathonId}. Reason: ${reason}`);
+        }
+      };
+
+      // Add to active monitoring tracker
+      this.activeMonitoring.set(monitoringKey, { userId, hackathonId, startedAt, stopMonitoring });
+
       // Schedule email monitoring
       const monitor = async () => {
         try {
-          console.log('monitoring')
+          if (isMonitoringStopped) return;
+
+          console.log(`Monitoring check for user ${userId}, hackathon ${hackathonId}`);
           const user = await User.findById(userId);
           const hackathon = await Hackathon.findById(hackathonId);
 
           if (!user || !hackathon) {
-            clearInterval(monitoringInterval);
+            stopMonitoring('user or hackathon not found');
             return;
           }
 
@@ -209,7 +264,7 @@ class GoogleAuthService {
           );
 
           if (registration && registration.confirmationStatus === 'confirmed') {
-            clearInterval(monitoringInterval);
+            stopMonitoring('registration already confirmed');
             return;
           }
 
@@ -223,7 +278,8 @@ class GoogleAuthService {
           });
 
           if (confirmationFound) {
-            clearInterval(monitoringInterval);
+            stopMonitoring('confirmation found in emails');
+            return;
           }
 
           // update check counters
@@ -238,19 +294,28 @@ class GoogleAuthService {
           console.error('Error in monitoring interval:', error);
         }
       }
-      monitor()
-      const monitoringInterval = setInterval(monitor, intervalMinutes * 60 * 1000);
+
+      // Start monitoring immediately
+      await monitor();
+      
+      // Only set interval if monitoring hasn't been stopped
+      if (!isMonitoringStopped) {
+        monitoringInterval = setInterval(monitor, intervalMinutes * 60 * 1000);
+      }
 
       // Stop monitoring after totalWindowHours
-      setTimeout(() => {
-        clearInterval(monitoringInterval);
-        console.log('expired')
-        // Mark as failed if still pending
-        Hackathon.updateOne(
-          { _id: hackathonId, registeredStudents: { $elemMatch: { student: userId, confirmationStatus: 'pending' } } },
-          { $set: { 'registeredStudents.$.confirmationStatus': 'failed' } }
-        ).catch(() => { });
-      }, totalWindowHours * 60 * 60 * 1000);
+      if (!isMonitoringStopped) {
+        timeoutId = setTimeout(() => {
+          if (!isMonitoringStopped) {
+            stopMonitoring('time window expired');
+            // Mark as failed if still pending
+            Hackathon.updateOne(
+              { _id: hackathonId, registeredStudents: { $elemMatch: { student: userId, confirmationStatus: 'pending' } } },
+              { $set: { 'registeredStudents.$.confirmationStatus': 'failed' } }
+            ).catch(() => { });
+          }
+        }, totalWindowHours * 60 * 60 * 1000);
+      }
 
       return true;
     } catch (error) {
@@ -291,6 +356,47 @@ class GoogleAuthService {
       console.error('Error getting Gmail profile:', error);
       throw error;
     }
+  }
+
+  // Method to stop monitoring for a specific user/hackathon combination
+  stopMonitoring(userId, hackathonId, reason = 'manually stopped') {
+    const monitoringKey = `${userId}_${hackathonId}`;
+    const monitoring = this.activeMonitoring.get(monitoringKey);
+    
+    if (monitoring && monitoring.stopMonitoring) {
+      monitoring.stopMonitoring(reason);
+      return true;
+    }
+    
+    return false;
+  }
+
+  // Method to get all active monitoring sessions
+  getActiveMonitoring() {
+    const active = [];
+    for (const [key, value] of this.activeMonitoring.entries()) {
+      const [userId, hackathonId] = key.split('_');
+      active.push({
+        userId,
+        hackathonId,
+        startedAt: value.startedAt,
+        duration: Date.now() - value.startedAt
+      });
+    }
+    return active;
+  }
+
+  // Method to stop all monitoring (useful for server shutdown)
+  stopAllMonitoring(reason = 'server shutdown') {
+    const stopped = [];
+    for (const [key, monitoring] of this.activeMonitoring.entries()) {
+      if (monitoring.stopMonitoring) {
+        monitoring.stopMonitoring(reason);
+        stopped.push(key);
+      }
+    }
+    this.activeMonitoring.clear();
+    return stopped;
   }
 }
 

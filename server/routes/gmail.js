@@ -7,7 +7,7 @@ const User = require('../models/User');
 // GET /api/gmail/auth-url - Get Google OAuth URL for linking Gmail
 router.get('/auth-url', auth, async (req, res) => {
   try {
-    const url = googleAuthService.generateAuthUrl();
+  const url = googleAuthService.generateAuthUrl(req.user._id);
     res.json({ success: true, url });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to generate auth URL' });

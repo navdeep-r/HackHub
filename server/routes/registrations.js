@@ -53,7 +53,7 @@ router.post('/start', auth, async (req, res) => {
       message: 'Registration successful',
       registration: {
         hackathonId: hackathon._id,
-        hackathonName: hackathon.name,
+        hackathonTitle: hackathon.title,
         status: 'pending'
       }
     });
