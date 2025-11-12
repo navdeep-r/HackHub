@@ -35,9 +35,19 @@ const FILTERS = [
 
 function useCountUp(target, duration = 1000) {
   const [value, setValue] = useState(0);
+
   useEffect(() => {
+    // if target is falsy or 0, set immediately and return
+    if (!target) {
+      setValue(0);
+      return;
+    }
+
     let start = 0;
-    const step = Math.ceil(target / (duration / 16));
+    // number of ticks at ~16ms per frame
+    const ticks = Math.max(1, Math.round(duration / 16));
+    const step = Math.ceil(target / ticks);
+
     const interval = setInterval(() => {
       start += step;
       if (start >= target) {
@@ -47,8 +57,10 @@ function useCountUp(target, duration = 1000) {
         setValue(start);
       }
     }, 16);
+
     return () => clearInterval(interval);
   }, [target, duration]);
+
   return value;
 }
 
@@ -89,10 +101,13 @@ const FacultyDashboard = () => {
 
   const handleDeleteHackathon = async (id) => {
     try {
+      console.log('[Delete] attempting to delete hackathon id=', id);
       await hackathonAPI.deleteHackathon(id);
       setHackathons(prev => prev.filter(h => h.id !== id));
     } catch (e) {
-      // handled by interceptor
+      // Log extra details for debugging
+      console.error('[Delete] error deleting hackathon', id, e?.response?.status, e?.response?.data || e.message);
+      // handled by interceptor / global handler
     }
   };
 
@@ -107,11 +122,11 @@ const FacultyDashboard = () => {
           registrationDeadline: data.registrationDeadline,
           eventDate: data.eventDate,
           tags: [data.category || 'Other'],
-          competitionType: data.type,
+          competitionType: data.type === 'free' ? 'unpaid' : data.type,
           prizePool: data.prizePool,
           platform: data.platform,
-          teamSizeMin: data.teamSizeMin ? parseInt(data.teamSizeMin) : undefined,
-          teamSizeMax: data.teamSizeMax ? parseInt(data.teamSizeMax) : undefined,
+          teamSizeMin: data.teamSizeMin ? parseInt(data.teamSizeMin, 10) : undefined,
+          teamSizeMax: data.teamSizeMax ? parseInt(data.teamSizeMax, 10) : undefined,
           maxParticipants: data.maxParticipants,
           requirements: data.requirements,
           isActive: data.isActive,
@@ -129,11 +144,11 @@ const FacultyDashboard = () => {
           registrationDeadline: data.registrationDeadline,
           eventDate: data.eventDate,
           tags: [data.category || 'Other'],
-          competitionType: data.type,
+          competitionType: data.type === 'free' ? 'unpaid' : data.type,
           prizePool: data.prizePool,
           platform: data.platform,
-          teamSizeMin: data.teamSizeMin ? parseInt(data.teamSizeMin) : undefined,
-          teamSizeMax: data.teamSizeMax ? parseInt(data.teamSizeMax) : undefined,
+          teamSizeMin: data.teamSizeMin ? parseInt(data.teamSizeMin, 10) : undefined,
+          teamSizeMax: data.teamSizeMax ? parseInt(data.teamSizeMax, 10) : undefined,
           maxParticipants: data.maxParticipants,
           requirements: data.requirements,
         };
@@ -149,12 +164,12 @@ const FacultyDashboard = () => {
   };
 
   const normalizeHackathon = (h) => ({
-    id: h._id,
-    title: h.title,
-    description: h.description,
-    link: h.competitionLink,
+    id: h._id || h.id,
+    title: h.title || '',
+    description: h.description || '',
+    link: h.competitionLink || h.link || '',
     category: (h.tags && h.tags[0]) || 'Other',
-    type: h.competitionType,
+    type: h.competitionType || h.type || '',
     registrationDeadline: h.registrationDeadline,
     eventDate: h.eventDate,
     impressions: h.impressions || 0,
@@ -187,18 +202,17 @@ const FacultyDashboard = () => {
   }, []);
 
   const filteredHackathons = hackathons.filter(hackathon => {
-    const matchesSearch = hackathon.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         hackathon.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = filterCategory === 'all' || hackathon.category === filterCategory;
+    const title = (hackathon.title || '').toString().toLowerCase();
+    const description = (hackathon.description || '').toString().toLowerCase();
+    const term = searchTerm.toLowerCase().trim();
+    const matchesSearch = term === '' || title.includes(term) || description.includes(term);
+    const matchesCategory = filterCategory === 'all' || (hackathon.category || 'Other') === filterCategory;
     return matchesSearch && matchesCategory;
   });
 
   return (
     <div className="min-h-screen bg-twitter-light-50 dark:bg-twitter-dark-900 text-twitter-dark-900 dark:text-white transition-colors duration-300">
-      {/* Theme Toggle */}
-      <div className="absolute top-6 right-6 z-10">
-        <ThemeToggle />
-      </div>
+      {/* Theme Toggle (removed duplicate top button) */}
       
       {/* Header & Stats */}
       <div className="relative bg-gradient-to-r from-twitter-light-50 dark:from-twitter-dark-900 via-twitter-blue-50 dark:via-twitter-blue-900/30 to-twitter-green-50 dark:to-twitter-green-900/20 pb-8 pt-6 px-4 md:px-0 animate-fade-in-up transition-colors duration-300">
@@ -280,6 +294,7 @@ const FacultyDashboard = () => {
           </button>
         </div>
       </div>
+
       {/* Content based on active tab */}
       {activeTab === 'hackathons' ? (
         <>
@@ -320,8 +335,8 @@ const FacultyDashboard = () => {
           <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 md:gap-8 mt-10 pb-20 animate-fade-in-up px-4">
             {filteredHackathons.map((hackathon) => (
               <div
-                key={hackathon.id}
-                className="card-hover group h-[420px] flex flex-col hover-glow"
+                key={hackathon.id || hackathon.title}
+                className="card-hover group h-[420px] flex flex-col hover-glow relative"
               >
                 {/* Views chip */}
                 <div className="absolute top-4 right-4 bg-twitter-light-100 dark:bg-twitter-dark-800 px-3 py-1 rounded-full flex items-center gap-1 text-twitter-blue-500 dark:text-twitter-blue-400 text-xs shadow-md z-10 transition-colors duration-200">
@@ -352,12 +367,12 @@ const FacultyDashboard = () => {
                   <div className="flex items-center gap-2">
                     <Calendar size={18} className="text-twitter-blue-500 dark:text-twitter-blue-400 flex-shrink-0" />
                     <span className="text-twitter-blue-600 dark:text-twitter-blue-300 text-xs transition-colors duration-200">
-                      {new Date(hackathon.eventDate).toLocaleDateString()}
+                      {hackathon.eventDate ? new Date(hackathon.eventDate).toLocaleDateString() : 'TBD'}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     {CATEGORY_ICONS[hackathon.category] || <Star size={18} className="text-twitter-dark-400 flex-shrink-0" />} 
-                    <span className="text-xs text-twitter-dark-600 dark:text-twitter-dark-300 transition-colors duration-200">{hackathon.category}</span>
+                    <span className="text-xs text-twitter-dark-600 dark:text-twitter-dark-300 transition-colors duration-200">{hackathon.category || 'Other'}</span>
                   </div>
                 </div>
                 
@@ -386,7 +401,7 @@ const FacultyDashboard = () => {
                 {/* External Link */}
                 <div className="mt-4 pt-4 border-t border-twitter-light-200 dark:border-twitter-dark-700 transition-colors duration-200">
                   <a 
-                    href={hackathon.link} 
+                    href={hackathon.link || '#'} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="text-twitter-blue-500 dark:text-twitter-blue-400 hover:text-twitter-blue-600 dark:hover:text-twitter-blue-300 text-xs flex items-center gap-1 transition-colors duration-200"
@@ -404,6 +419,7 @@ const FacultyDashboard = () => {
           <AnalyticsSection hackathons={hackathons} />
         </div>
       )}
+
       {/* Modal for view/edit */}
       {showModal && (
         <HackathonModal
@@ -413,6 +429,7 @@ const FacultyDashboard = () => {
           onSave={handleSaveHackathon}
         />
       )}
+
       {/* Floating Create Button */}
       <button
         onClick={handleCreateHackathon}

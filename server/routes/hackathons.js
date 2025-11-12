@@ -9,13 +9,15 @@ const router = express.Router();
 
 // Create new hackathon (Faculty only)
 router.post('/', auth, requireFaculty, [
+  // Only require title, competitionLink and registrationDeadline per request
   body('title').trim().isLength({ min: 5, max: 100 }).withMessage('Title must be between 5-100 characters'),
-  body('description').isLength({ min: 20, max: 2000 }).withMessage('Description must be between 20-2000 characters'),
   body('competitionLink').isURL().withMessage('Valid competition link is required'),
   body('registrationDeadline').isISO8601().withMessage('Valid registration deadline is required'),
-  body('eventDate').isISO8601().withMessage('Valid event date is required'),
-  body('tags').isArray({ min: 1 }).withMessage('At least one tag is required'),
-  body('competitionType').isIn(['paid', 'unpaid']).withMessage('Competition type must be paid or unpaid'),
+  // Optional fields (validated if present)
+  body('description').optional().isLength({ min: 10, max: 2000 }).withMessage('Description must be between 10-2000 characters'),
+  body('eventDate').optional().isISO8601().withMessage('Valid event date is required'),
+  body('tags').optional().isArray({ min: 1 }).withMessage('At least one tag is required if provided'),
+  body('competitionType').optional().isIn(['paid', 'unpaid']).withMessage('Competition type must be paid or unpaid'),
   body('prizePool').optional().isString(),
   body('maxParticipants').optional().isInt({ min: 1 }),
   body('requirements').optional().isLength({ max: 1000 })
@@ -31,39 +33,74 @@ router.post('/', auth, requireFaculty, [
       tags, competitionType, prizePool, maxParticipants, requirements
     } = req.body;
 
-    // Validate dates
+    // Validate registration deadline (required)
     const regDeadline = new Date(registrationDeadline);
-    const event = new Date(eventDate);
     const now = new Date();
-
+    if (isNaN(regDeadline.getTime())) {
+      return res.status(400).json({ error: 'Invalid registration deadline' });
+    }
     if (regDeadline <= now) {
       return res.status(400).json({ error: 'Registration deadline must be in the future' });
     }
 
-    if (event <= regDeadline) {
-      return res.status(400).json({ error: 'Event date must be after registration deadline' });
+    // If eventDate provided, validate ordering
+    let event;
+    if (eventDate) {
+      event = new Date(eventDate);
+      if (isNaN(event.getTime())) {
+        return res.status(400).json({ error: 'Invalid event date' });
+      }
+      if (event <= regDeadline) {
+        return res.status(400).json({ error: 'Event date must be after registration deadline' });
+      }
     }
 
     const hackathon = new Hackathon({
       title,
-      description,
+      description: description || undefined,
+      competitionLink,
+      registrationDeadline: regDeadline,
+      eventDate: event || undefined,
+      tags: tags || undefined,
+      competitionType: competitionType || undefined,
+      createdBy: req.user._id,
+      prizePool: prizePool || '',
+      maxParticipants: maxParticipants || undefined,
+      requirements: requirements || undefined
+    });
+    // Log the payload about to be saved for debugging
+    console.log('[CreateHackathon] payload:', {
+      title,
       competitionLink,
       registrationDeadline: regDeadline,
       eventDate: event,
       tags,
       competitionType,
-      createdBy: req.user._id,
       prizePool,
       maxParticipants,
-      requirements
+      requirements,
+      createdBy: req.user._id
     });
 
-    await hackathon.save();
-
-    res.status(201).json({
-      message: 'Hackathon created successfully',
-      hackathon
-    });
+    try {
+      await hackathon.save();
+      res.status(201).json({
+        message: 'Hackathon created successfully',
+        hackathon
+      });
+    } catch (saveErr) {
+      console.error('Hackathon save error:', saveErr);
+      // Mongoose validation error -> return 422 with details
+      if (saveErr.name === 'ValidationError') {
+        const errors = Object.keys(saveErr.errors).map(key => ({
+          field: key,
+          message: saveErr.errors[key].message
+        }));
+        return res.status(422).json({ error: 'Validation failed', errors });
+      }
+      // Unknown error -> propagate as 500
+      return res.status(500).json({ error: 'Failed to create hackathon', details: saveErr.message });
+    }
   } catch (error) {
     console.error('Hackathon creation error:', error);
     res.status(500).json({ error: 'Failed to create hackathon' });
@@ -228,14 +265,22 @@ router.put('/:id', auth, requireFaculty, [
 // Delete hackathon
 router.delete('/:id', auth, requireFaculty, async (req, res) => {
   try {
-    const hackathon = await Hackathon.findOneAndDelete({
-      _id: req.params.id,
-      createdBy: req.user._id
-    });
+    console.log(`[DeleteRoute] incoming DELETE /api/hackathons/${req.params.id} by user ${req.user?._id}`);
+    // First fetch the hackathon to give clearer errors when it exists
+    const hackathon = await Hackathon.findById(req.params.id);
 
     if (!hackathon) {
       return res.status(404).json({ error: 'Hackathon not found' });
     }
+
+    // Only allow the creator to delete the hackathon. If someone else (even faculty)
+    // attempts deletion, return 403 so the client can explain it's a permission issue.
+    if (hackathon.createdBy.toString() !== req.user._id.toString()) {
+      console.warn(`Delete denied: user ${req.user._id} attempted to delete hackathon ${req.params.id} created by ${hackathon.createdBy}`);
+      return res.status(403).json({ error: 'You are not authorized to delete this hackathon' });
+    }
+
+    await Hackathon.findByIdAndDelete(req.params.id);
 
     res.json({ message: 'Hackathon deleted successfully' });
   } catch (error) {
