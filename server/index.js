@@ -26,14 +26,24 @@ const limiter = rateLimit({
 app.use(['/api/auth', '/api/analytics'], limiter);
 
 // CORS configuration (env-driven)
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || (process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : ''))
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
-app.use(cors({
-  origin: allowedOrigins.length ? allowedOrigins : ['http://localhost:3000'],
-  credentials: true
-}));
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    // allow requests with no origin (e.g., server-to-server, curl)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('CORS policy: origin not allowed'), false);
+  },
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // enable preflight for all routes
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
