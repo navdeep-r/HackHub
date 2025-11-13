@@ -287,6 +287,23 @@ export const analyticsAPI = {
   getTimeSeries: (params = {}) => api.get('/analytics/time-series', { params }),
 };
 
+// Registration API with validation
+export const registrationAPI = {
+  registerForHackathon: (hackathonId, data = {}) => {
+    if (!hackathonId) {
+      return Promise.reject(new Error('Hackathon ID is required'));
+    }
+    return api.post(`/registrations/start`, { hackathonId, ...data });
+  },
+  
+  getRegistrationStatus: (hackathonId) => {
+    if (!hackathonId) {
+      return Promise.reject(new Error('Hackathon ID is required'));
+    }
+    return api.get(`/registrations/${hackathonId}/status`);
+  },
+};
+
 // Utility functions for common operations
 export const apiUtils = {
   // Helper to check if user is authenticated

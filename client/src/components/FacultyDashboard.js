@@ -8,7 +8,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import HackathonModal from './HackathonModal';
 import AnalyticsSection from './AnalyticsSection';
 import ThemeToggle from './ThemeToggle';
-import { hackathonAPI } from '../services/api';
+import { hackathonAPI, analyticsAPI, registrationAPI } from '../services/api';
+import toast from 'react-hot-toast';
 
 const CATEGORY_ICONS = {
   'AI/ML': <Zap className="inline text-twitter-blue-400" size={18} />, 
@@ -425,8 +426,13 @@ const FacultyDashboard = () => {
         <HackathonModal
           hackathon={selectedHackathon}
           mode={modalMode}
+          user={user}
           onClose={() => setShowModal(false)}
           onSave={handleSaveHackathon}
+          hackathonAPI={hackathonAPI}
+          analyticsAPI={analyticsAPI}
+          registrationAPI={registrationAPI} // Add registrationAPI
+          toast={toast}
         />
       )}
 

@@ -148,7 +148,8 @@ const RegistrationStatus = ({
   monitoringTimeLeft,
   onRegister,
   registering,
-  isDeadlinePassed
+  isDeadlinePassed,
+  role
 }) => {
   // Deadline passed
   if (isDeadlinePassed) {
@@ -169,7 +170,11 @@ const RegistrationStatus = ({
         <div className="relative p-6 text-center">
           <CheckCircle className="mx-auto mb-3 text-emerald-400" size={32} />
           <h3 className="font-semibold text-foreground mb-1">Registration Confirmed</h3>
-          <p className="text-sm text-muted-foreground">You're all set for this hackathon!</p>
+          <p className="text-sm text-muted-foreground">
+            {role === 'faculty' 
+              ? 'You have registered for this hackathon.' 
+              : 'You\'re all set for this hackathon!'}
+          </p>
         </div>
       </div>
     );
@@ -186,7 +191,9 @@ const RegistrationStatus = ({
           <Loader2 className="mx-auto mb-3 text-primary animate-spin" size={32} />
           <h3 className="font-semibold text-foreground mb-2">Confirming Registration</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            Checking your email for confirmation...
+            {role === 'faculty'
+              ? 'Checking email for confirmation...'
+              : 'Checking your email for confirmation...'}
           </p>
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/6 rounded-lg">
             <Clock size={16} className="text-primary" />
@@ -207,7 +214,9 @@ const RegistrationStatus = ({
           <AlertCircle className="mx-auto mb-3 text-destructive" size={32} />
           <h3 className="font-semibold text-foreground mb-1">Confirmation Not Found</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            Please check your email and try again
+            {role === 'faculty'
+              ? 'Please check email and try again'
+              : 'Please check your email and try again'}
           </p>
           <button
             onClick={onRegister}
@@ -245,7 +254,7 @@ const RegistrationStatus = ({
       ) : (
         <span className="flex items-center justify-center gap-2">
           <UserPlus size={20} />
-          Register Now
+          {role === 'faculty' ? 'Register for Hackathon' : 'Register Now'}
         </span>
       )}
     </button>
@@ -308,8 +317,8 @@ const ConfettiAnimation = ({ isActive, onComplete }) => {
     for (let i = 0; i < 50; i++) {
       newParticles.push({
         id: i,
-        x: 50, // Center position
-        y: 50,
+        x: 50, // Center position (percentage)
+        y: 50, // Center position (percentage)
         color: colors[Math.floor(Math.random() * colors.length)],
         size: Math.random() * 8 + 4,
         rotation: Math.random() * 360,
@@ -325,7 +334,7 @@ const ConfettiAnimation = ({ isActive, onComplete }) => {
     // Auto-clear after animation
     const timer = setTimeout(() => {
       setParticles([]);
-      onComplete();
+      if (onComplete) onComplete();
     }, 2000);
     
     return () => clearTimeout(timer);
@@ -348,6 +357,57 @@ const ConfettiAnimation = ({ isActive, onComplete }) => {
   );
 };
 
+// Add a new CountdownTimer component for the registration deadline
+const RegistrationCountdownTimer = ({ deadline }) => {
+  const [timeLeft, setTimeLeft] = useState(() => getTimeLeft(deadline));
+
+  useEffect(() => {
+    if (!deadline) return;
+
+    const interval = setInterval(() => {
+      setTimeLeft(getTimeLeft(deadline));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [deadline]);
+
+  const isExpired = timeLeft.total === 0;
+
+  if (isExpired) {
+    return (
+      <div className="text-center p-4 rounded-xl bg-red-900/20 border border-red-500/30">
+        <div className="text-red-400 font-semibold">Registration Closed</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 rounded-xl bg-gradient-to-br from-blue-900/30 to-indigo-900/30 border border-blue-500/30">
+      <div className="text-center">
+        <div className="text-sm text-blue-200 mb-2">Registration Ends In</div>
+        <div className="flex justify-center gap-2">
+          <div className="bg-blue-900/50 rounded-lg p-2 min-w-[60px]">
+            <div className="text-xl font-bold text-white">{timeLeft.days}</div>
+            <div className="text-xs text-blue-200">Days</div>
+          </div>
+          <div className="bg-blue-900/50 rounded-lg p-2 min-w-[60px]">
+            <div className="text-xl font-bold text-white">{timeLeft.hours}</div>
+            <div className="text-xs text-blue-200">Hours</div>
+          </div>
+          <div className="bg-blue-900/50 rounded-lg p-2 min-w-[60px]">
+            <div className="text-xl font-bold text-white">{timeLeft.mins}</div>
+            <div className="text-xs text-blue-200">Mins</div>
+          </div>
+          <div className="bg-blue-900/50 rounded-lg p-2 min-w-[60px]">
+            <div className="text-xl font-bold text-white">{timeLeft.secs}</div>
+            <div className="text-xs text-blue-200">Secs</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Main Component
 const HackathonModal = ({
   hackathon,
@@ -360,6 +420,7 @@ const HackathonModal = ({
   analyticsAPI,
   hackathonAPI,
   studentAPI,
+  registrationAPI, // Add registrationAPI
   toast
 }) => {
   const role = user?.role || 'student';
@@ -446,14 +507,22 @@ const HackathonModal = ({
   // Check registration status
   useEffect(() => {
     const checkRegistrationStatus = async () => {
-      if (mode !== 'view' || role !== 'student' || !hackathon?.id || !studentAPI || pendingMonitor) return;
+      if (mode !== 'view' || !['student', 'faculty'].includes(role) || !hackathon?.id || !hackathonAPI || pendingMonitor) return;
 
       try {
-        const res = await studentAPI.getRegistrationStatus(hackathon.id);
+        // Use studentAPI for students, registrationAPI for faculty
+        const apiToUse = role === 'student' ? studentAPI : registrationAPI;
+        const res = await apiToUse.getRegistrationStatus(hackathon.id);
         const status = res?.data?.registration?.confirmationStatus;
 
         if (!pendingMonitor) {
-          setIsRegistered(Boolean(res?.data?.isRegistered));
+          // For studentAPI, isRegistered is a boolean field
+          // For registrationAPI, we check if registration exists
+          const isRegisteredValue = role === 'student' 
+            ? Boolean(res?.data?.isRegistered) 
+            : Boolean(res?.data?.registration);
+            
+          setIsRegistered(isRegisteredValue);
           setConfirmedRegistration(prev => (status === 'confirmed' ? true : prev));
           setRegistrationFailed(prev => (status === 'failed' ? true : prev));
         }
@@ -463,11 +532,11 @@ const HackathonModal = ({
     };
 
     checkRegistrationStatus();
-  }, [mode, role, hackathon?.id, pendingMonitor, studentAPI]);
+  }, [mode, role, hackathon?.id, pendingMonitor, studentAPI, registrationAPI, hackathonAPI]);
 
   // Poll for confirmation
   useEffect(() => {
-    if (role !== 'student' || !pendingMonitor || !hackathon?.id || !studentAPI) return;
+    if (!['student', 'faculty'].includes(role) || !pendingMonitor || !hackathon?.id || !hackathonAPI) return;
 
     let cancelled = false;
     let attempts = 0;
@@ -498,7 +567,9 @@ const HackathonModal = ({
       attempts += 1;
 
       try {
-        const res = await studentAPI.getRegistrationStatus(hackathon.id);
+        // Use studentAPI for students, registrationAPI for faculty
+        const apiToUse = role === 'student' ? studentAPI : registrationAPI;
+        const res = await apiToUse.getRegistrationStatus(hackathon.id);
         const status = res?.data?.registration?.confirmationStatus;
 
         if (status === 'confirmed' && !cancelled) {
@@ -552,7 +623,7 @@ const HackathonModal = ({
       setMonitoringTimeLeft(0);
       try { localStorage.removeItem(getMonitorStorageKey(hackathon.id)); } catch {}
     };
-  }, [role, pendingMonitor, hackathon?.id, onRegistered, studentAPI, toast]);
+  }, [role, pendingMonitor, hackathon?.id, onRegistered, studentAPI, registrationAPI, toast]);
 
   const handleRegisterNow = useCallback(async () => {
     if (!hackathon?.id || !user?.email || !hackathonAPI) return;
@@ -560,18 +631,23 @@ const HackathonModal = ({
     let toastId;
     if (toast) toastId = toast.loading('Submitting registration...');
 
+    // Immediately set registered state for visual feedback
+    setIsRegistered(true);
+    setRegistering(true);
+    
+    // Immediately show confetti animation
+    setShowConfetti(true);
+    
+    // Hide confetti after 2 seconds
+    setTimeout(() => {
+      setShowConfetti(false);
+    }, 2000);
+
     try {
-      setRegistering(true);
       setRegistrationFailed(false);
       setMonitoringTimeLeft(0);
 
-      // Immediately set registered in UI for better UX (ensures button changes right away)
-      setIsRegistered(true);
-
-      // Show confetti animation when registration begins
-      setShowConfetti(true);
-
-      // show pending monitor state to wait for confirmation
+      // Show pending monitor state to wait for confirmation
       setPendingMonitor(true);
 
       try {
@@ -583,7 +659,9 @@ const HackathonModal = ({
         }));
       } catch { /* ignore */ }
 
-      const res = await hackathonAPI.registerForHackathon(hackathon.id, { emailUsed: user.email });
+      // Use hackathonAPI for students, registrationAPI for faculty
+      const apiToUse = role === 'student' ? hackathonAPI : registrationAPI;
+      const res = await apiToUse.registerForHackathon(hackathon.id, { emailUsed: user.email });
 
       if (toast) toast.success('Registration submitted — checking for confirmation.', { id: toastId });
 
@@ -598,14 +676,14 @@ const HackathonModal = ({
       if (toast) toast.error(errorMessage);
       setPendingMonitor(false);
       setRegistrationFailed(true);
-      // revert optimistic UI if needed
+      // Revert optimistic UI if needed
       setIsRegistered(false);
       setShowConfetti(false); // Hide confetti on error
       try { localStorage.removeItem(getMonitorStorageKey(hackathon.id)); } catch { /* ignore */ }
     } finally {
       setRegistering(false);
     }
-  }, [hackathon?.id, user?.email, hackathonAPI, toast]);
+  }, [hackathon?.id, user?.email, hackathonAPI, registrationAPI, role, toast]);
 
   const handleFormChange = useCallback((e) => {
     const { name, value } = e.target;
@@ -1138,67 +1216,27 @@ const HackathonModal = ({
                   </div>
                 </div>
 
-                {/* Countdown + Circular Progress */}
-                <div className="p-4 rounded-xl bg-gradient-to-br from-blue-900/30 to-indigo-900/30 border border-blue-500/30 shadow-sm flex flex-col items-center gap-4">
-                  <div className="relative w-36 h-36">
-                    <svg viewBox="0 0 36 36" className="w-36 h-36">
-                      <defs>
-                        <linearGradient id="g1" x1="0%" x2="100%">
-                          <stop offset="0%" stopColor="#3b82f6" />
-                          <stop offset="100%" stopColor="#8b5cf6" />
-                        </linearGradient>
-                      </defs>
-                      <path d="M18 2.0845
-                        a 15.9155 15.9155 0 0 1 0 31.831
-                        a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#17233A" strokeWidth="3" />
-                      <path
-                        d="M18 2.0845
-                          a 15.9155 15.9155 0 0 1 0 31.831
-                          a 15.9155 15.9155 0 0 1 0 -31.831"
-                        fill="none"
-                        stroke="url(#g1)"
-                        strokeWidth="3"
-                        strokeDasharray={`${animatedProgress} ${100 - animatedProgress}`}
-                        style={{ transition: 'stroke-dasharray 900ms ease' }}
-                        strokeLinecap="round"
-                        transform="rotate(-90 18 18)"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-center">
-                        <div className="text-xl font-semibold text-white">{Math.round(animatedProgress)}%</div>
-                        <div className="text-xs text-blue-200">progress</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="w-full text-center">
-                    <div className="text-sm text-blue-200">Time until registration ends</div>
-                    <div className="text-lg font-semibold text-white mt-1">{getTimeLeft(hackathon.registrationDeadline).days}d {getTimeLeft(hackathon.registrationDeadline).hours}h</div>
-                  </div>
-                </div>
-
+                {/* Registration Countdown Timer */}
+                <RegistrationCountdownTimer deadline={hackathon.registrationDeadline} />
+                
                 {/* Register / Status area */}
                 <div className="p-4 rounded-xl bg-gradient-to-br from-blue-900/30 to-indigo-900/30 border border-blue-500/30 shadow-sm relative">
-                  {role === 'student' ? (
-                    <div className="space-y-3">
-                      <RegistrationStatus
-                        isRegistered={isRegistered}
-                        confirmedRegistration={confirmedRegistration}
-                        registrationFailed={registrationFailed}
-                        pendingMonitor={pendingMonitor}
-                        monitoringTimeLeft={monitoringTimeLeft}
-                        onRegister={handleRegisterNow}
-                        registering={registering}
-                        isDeadlinePassed={isDeadlinePassed}
-                      />
+                  <div className="space-y-3">
+                    <RegistrationStatus
+                      isRegistered={isRegistered}
+                      confirmedRegistration={confirmedRegistration}
+                      registrationFailed={registrationFailed}
+                      pendingMonitor={pendingMonitor}
+                      monitoringTimeLeft={monitoringTimeLeft}
+                      onRegister={handleRegisterNow}
+                      registering={registering}
+                      isDeadlinePassed={isDeadlinePassed}
+                      role={role}
+                    />
 
-                      {confirmedRegistration && <div className="text-sm text-emerald-400">Registration confirmed</div>}
-                      {registrationFailed && <div className="text-sm text-red-400">Registration not confirmed</div>}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-blue-200 text-center">Faculty tools available above</div>
-                  )}
+                    {confirmedRegistration && <div className="text-sm text-emerald-400">Registration confirmed</div>}
+                    {registrationFailed && <div className="text-sm text-red-400">Registration not confirmed</div>}
+                  </div>
                 </div>
               </aside>
             </div>

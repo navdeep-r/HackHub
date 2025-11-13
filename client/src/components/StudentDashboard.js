@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import HackathonModal from './HackathonModal';
 import ThemeToggle from './ThemeToggle';
-import { hackathonAPI, studentAPI } from '../services/api';
+import { hackathonAPI, studentAPI, registrationAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
 const CATEGORY_ICONS = {
@@ -433,8 +433,13 @@ const StudentDashboard = () => {
         <HackathonModal
           hackathon={selectedHackathon}
           mode="view"
+          user={user}
           onClose={() => setShowModal(false)}
           onRegistered={(id) => setHackathons(prev => prev.map(x => x.id === id ? { ...x, isRegistered: true } : x))}
+          hackathonAPI={hackathonAPI}
+          studentAPI={studentAPI}
+          registrationAPI={registrationAPI}
+          toast={toast}
         />
       )}
     </div>
