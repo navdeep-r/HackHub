@@ -333,82 +333,82 @@ const FacultyDashboard = () => {
           </div>
           
           {/* Hackathons List */}
-          <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 md:gap-8 mt-10 pb-20 animate-fade-in-up px-4">
+          <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-4 md:gap-6 mt-8 pb-20 animate-fade-in-up px-4">
             {filteredHackathons.map((hackathon) => (
               <div
                 key={hackathon.id || hackathon.title}
-                className="card-hover group h-[420px] flex flex-col hover-glow relative"
+                className="card-hover group h-[320px] flex flex-col hover-glow relative"
               >
                 {/* Views chip */}
-                <div className="absolute top-4 right-4 bg-twitter-light-100 dark:bg-twitter-dark-800 px-3 py-1 rounded-full flex items-center gap-1 text-twitter-blue-500 dark:text-twitter-blue-400 text-xs shadow-md z-10 transition-colors duration-200">
-                  <Eye size={14} /> {hackathon.impressions || 0}
+                <div className="absolute top-2 right-2 bg-twitter-light-100 dark:bg-twitter-dark-800 px-2 py-1 rounded-full flex items-center gap-1 text-twitter-blue-500 dark:text-twitter-blue-400 text-xs shadow z-10 transition-colors duration-200">
+                  <Eye size={12} /> {hackathon.impressions || 0}
                 </div>
                 
                 {/* Status Badges */}
-                <div className="flex gap-2 mb-3 flex-wrap">
+                <div className="flex gap-1 mb-2 flex-wrap">
                   {hackathon.isNew && (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-warning text-white font-bold text-xs shadow animate-bounce-gentle">
-                      <Flame size={14} /> NEW
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gradient-warning text-white font-bold text-xs shadow animate-bounce-gentle">
+                      <Flame size={12} /> NEW
                     </span>
                   )}
                 </div>
                 
                 {/* Title */}
-                <h3 className="text-xl font-bold mb-3 text-twitter-dark-900 dark:text-white leading-tight line-clamp-2 transition-colors duration-200">
+                <h3 className="text-lg font-bold mb-2 text-twitter-dark-900 dark:text-white leading-tight line-clamp-2 transition-colors duration-200">
                   {hackathon.title}
                 </h3>
                 
                 {/* Description */}
-                <p className="text-twitter-dark-600 dark:text-twitter-dark-300 text-sm mb-4 leading-relaxed line-clamp-3 transition-colors duration-200">
+                <p className="text-twitter-dark-600 dark:text-twitter-dark-300 text-xs mb-3 leading-relaxed line-clamp-3 transition-colors duration-200">
                   {hackathon.description}
                 </p>
                 
                 {/* Date and Category */}
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center gap-2">
-                    <Calendar size={18} className="text-twitter-blue-500 dark:text-twitter-blue-400 flex-shrink-0" />
+                <div className="space-y-1 mb-3">
+                  <div className="flex items-center gap-1">
+                    <Calendar size={14} className="text-twitter-blue-500 dark:text-twitter-blue-400 flex-shrink-0" />
                     <span className="text-twitter-blue-600 dark:text-twitter-blue-300 text-xs transition-colors duration-200">
                       {hackathon.eventDate ? new Date(hackathon.eventDate).toLocaleDateString() : 'TBD'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {CATEGORY_ICONS[hackathon.category] || <Star size={18} className="text-twitter-dark-400 flex-shrink-0" />} 
+                  <div className="flex items-center gap-1">
+                    {CATEGORY_ICONS[hackathon.category] || <Star size={14} className="text-twitter-dark-400 flex-shrink-0" />} 
                     <span className="text-xs text-twitter-dark-600 dark:text-twitter-dark-300 transition-colors duration-200">{hackathon.category || 'Other'}</span>
                   </div>
                 </div>
                 
                 {/* Action Buttons */}
-                <div className="flex gap-2 mt-auto pt-4 flex-wrap">
+                <div className="flex gap-1 mt-auto pt-2 flex-wrap">
                   <button
                     onClick={() => handleViewHackathon(hackathon)}
-                    className="btn-primary flex-1 min-w-[120px] hover-scale"
+                    className="btn-primary text-xs flex-1 min-w-[80px] hover-scale py-1 px-2"
                   >
-                    View Details
+                    View
                   </button>
                   <button
                     onClick={() => handleEditHackathon(hackathon)}
-                    className="bg-gradient-success text-white font-semibold py-2 px-4 rounded-full shadow-md hover-scale transition-all flex-1 min-w-[80px] focus:ring-2 focus:ring-twitter-green-400 focus:ring-offset-2 dark:focus:ring-offset-twitter-dark-800"
+                    className="bg-gradient-success text-white font-semibold text-xs py-1 px-2 rounded-full shadow hover-scale transition-all flex-1 min-w-[60px] focus:ring-1 focus:ring-twitter-green-400 focus:ring-offset-1 dark:focus:ring-offset-twitter-dark-800"
                   >
                     Edit 
                   </button>
                   <button
                     onClick={() => handleDeleteHackathon(hackathon.id)}
-                    className="bg-gradient-error text-white font-semibold py-2 px-3 rounded-full shadow-md hover-scale transition-all min-w-[80px] focus:ring-2 focus:ring-twitter-red-400 focus:ring-offset-2 dark:focus:ring-offset-twitter-dark-800"
+                    className="bg-gradient-error text-white font-semibold text-xs py-1 px-2 rounded-full shadow hover-scale transition-all min-w-[60px] focus:ring-1 focus:ring-twitter-red-400 focus:ring-offset-1 dark:focus:ring-offset-twitter-dark-800"
                   >
                     Delete
                   </button>
                 </div>
                 
                 {/* External Link */}
-                <div className="mt-4 pt-4 border-t border-twitter-light-200 dark:border-twitter-dark-700 transition-colors duration-200">
+                <div className="mt-3 pt-3 border-t border-twitter-light-200 dark:border-twitter-dark-700 transition-colors duration-200">
                   <a 
                     href={hackathon.link || '#'} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="text-twitter-blue-500 dark:text-twitter-blue-400 hover:text-twitter-blue-600 dark:hover:text-twitter-blue-300 text-xs flex items-center gap-1 transition-colors duration-200"
                   >
-                    <ExternalLink size={14} className="flex-shrink-0" /> 
-                    <span>Visit Competition Page</span>
+                    <ExternalLink size={12} className="flex-shrink-0" /> 
+                    <span className="text-xs">Visit Page</span>
                   </a>
                 </div>
               </div>

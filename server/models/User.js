@@ -72,32 +72,6 @@ const userSchema = new mongoose.Schema({
   lastLogin: {
     type: Date,
     default: Date.now
-  },
-  // Google OAuth for email monitoring (simplified)
-  google: {
-    email: {
-      type: String,
-      lowercase: true,
-      trim: true,
-      description: 'Gmail address for monitoring'
-    },
-    accessToken: {
-      type: String,
-      description: 'Google access token'
-    },
-    refreshToken: {
-      type: String,
-      description: 'Google refresh token'
-    },
-    tokenExpiry: {
-      type: Date,
-      description: 'When the access token expires'
-    },
-    linkedAt: {
-      type: Date,
-      default: Date.now,
-      description: 'When Gmail was first linked'
-    }
   }
 }, {
   timestamps: true
@@ -142,13 +116,6 @@ userSchema.methods.getPublicProfile = function() {
   try {
     const userObject = this.toObject();
     delete userObject.password;
-    
-    // Remove sensitive Google OAuth data but keep basic info
-    if (userObject.google) {
-      delete userObject.google.accessToken;
-      delete userObject.google.refreshToken;
-      delete userObject.google.tokenExpiry;
-    }
     
     console.log('Public profile generated for user:', userObject._id);
     return userObject;

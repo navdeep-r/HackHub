@@ -166,13 +166,6 @@ export const authAPI = {
     return api.put('/auth/profile', data);
   },
   
-  storeGoogleTokens: (tokens) => {
-    if (!tokens) {
-      return Promise.reject(new Error('Tokens are required'));
-    }
-    return api.post('/auth/google-tokens', tokens);
-  },
-  
   devLogin: (payload) => {
     if (!payload || !payload.role || !payload.email) {
       return Promise.reject(new Error('Role and email are required for dev login'));

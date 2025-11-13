@@ -64,7 +64,7 @@ const StudentDashboard = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedHackathon, setSelectedHackathon] = useState(null);
 
-  // track hackathonId => boolean while we wait for email confirmation
+  // track hackathonId => boolean while we wait for registration processing
   const [pendingRegistrations, setPendingRegistrations] = useState({});
   // track hackathonId => boolean for confirmed registrations
   const [confirmedRegistrations, setConfirmedRegistrations] = useState({});
@@ -148,7 +148,7 @@ const StudentDashboard = () => {
             setPendingRegistrations(p => { const c = { ...p }; delete c[hackathonId]; return c; });
             setConfirmedRegistrations(p => ({ ...p, [hackathonId]: true }));
             setHackathons(prev => prev.map(h => h.id === hackathonId ? { ...h, isRegistered: true } : h));
-            toast.success('Registration confirmed via email.');
+            toast.success('Registration confirmed!');
           } else if (status === 'failed' && attempts >= 3) {
             // Only fail after multiple attempts (1.5 minutes)
             console.log('🔴 StudentDashboard: Registration failed after multiple attempts');
@@ -193,16 +193,7 @@ const StudentDashboard = () => {
       const { data } = await hackathonAPI.registerForHackathon(hackathonId, { emailUsed: user?.email });
       
       console.log(`🟡 Registration API response:`, data);
-      toast.success('Registration submitted! Checking for email confirmation...', { duration: 4000 });
-      
-      if (data && !data.gmailLinked && data.gmailAuthUrl) {
-        toast.info('Please link Gmail to enable automatic confirmation checks. Opening in new tab...', { duration: 6000 });
-        try { 
-          window.open(data.gmailAuthUrl, '_blank', 'noopener,noreferrer'); 
-        } catch (e) { 
-          console.error('Failed to open Gmail auth URL:', e);
-        }
-      }
+      toast.success('Registration submitted successfully!', { duration: 4000 });
       
       // Start polling for confirmation
       startPolling(hackathonId);
@@ -320,72 +311,72 @@ const StudentDashboard = () => {
       </div>
 
       {/* Hackathons Grid */}
-      <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 md:gap-8 mt-10 pb-20 animate-fade-in-up px-4">
+      <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-4 md:gap-6 mt-8 pb-20 animate-fade-in-up px-4">
         {filtered.map(h => (
           <div
             key={h.id}
-            className="card-hover group h-[420px] flex flex-col hover-glow"
+            className="card-hover group h-[320px] flex flex-col hover-glow"
           >
             {/* Views chip */}
-            <div className="absolute top-4 right-4 bg-twitter-light-100 dark:bg-twitter-dark-800 px-3 py-1 rounded-full flex items-center gap-1 text-twitter-blue-500 dark:text-twitter-blue-400 text-xs shadow-md z-10 transition-colors duration-200">
-              <Eye size={14} /> {h.impressions || 0}
+            <div className="absolute top-2 right-2 bg-twitter-light-100 dark:bg-twitter-dark-800 px-2 py-1 rounded-full flex items-center gap-1 text-twitter-blue-500 dark:text-twitter-blue-400 text-xs shadow z-10 transition-colors duration-200">
+              <Eye size={12} /> {h.impressions || 0}
             </div>
             
             {/* Status Badges */}
-            <div className="flex gap-2 mb-3 flex-wrap">
+            <div className="flex gap-1 mb-2 flex-wrap">
               {h.isNew && (
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-warning text-white font-bold text-xs shadow animate-bounce-gentle">
-                  <Flame size={14} /> NEW
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gradient-warning text-white font-bold text-xs shadow animate-bounce-gentle">
+                  <Flame size={12} /> NEW
                 </span>
               )}
               {pendingRegistrations[h.id] && (
-                <span className="status-warning animate-pulse">
-                  <Clock size={14} /> CHECKING...
+                <span className="status-warning animate-pulse text-xs">
+                  <Clock size={12} /> CHECKING...
                 </span>
               )}
               {h.isRegistered && confirmedRegistrations[h.id] && (
-                <span className="status-success">
-                  <CheckCircle size={14} /> CONFIRMED
+                <span className="status-success text-xs">
+                  <CheckCircle size={12} /> CONFIRMED
                 </span>
               )}
               {h.isRegistered && !confirmedRegistrations[h.id] && !pendingRegistrations[h.id] && (
-                <span className="status-success">
-                  <UserCheck size={14} /> REGISTERED
+                <span className="status-success text-xs">
+                  <UserCheck size={12} /> REGISTERED
                 </span>
               )}
             </div>
             
             {/* Title */}
-            <h3 className="text-xl font-bold mb-3 text-twitter-dark-900 dark:text-white leading-tight line-clamp-2 transition-colors duration-200">
+            <h3 className="text-lg font-bold mb-2 text-twitter-dark-900 dark:text-white leading-tight line-clamp-2 transition-colors duration-200">
               {h.title}
             </h3>
             
             {/* Description */}
-            <p className="text-twitter-dark-600 dark:text-twitter-dark-300 text-sm mb-4 leading-relaxed line-clamp-3 transition-colors duration-200">
+            <p className="text-twitter-dark-600 dark:text-twitter-dark-300 text-xs mb-3 leading-relaxed line-clamp-3 transition-colors duration-200">
               {h.description}
             </p>
             
             {/* Date and Category */}
-            <div className="space-y-2 mb-4">
-              <div className="flex items-center gap-2">
-                <Calendar size={18} className="text-twitter-blue-500 dark:text-twitter-blue-400 flex-shrink-0" />
+            <div className="space-y-1 mb-3">
+              <div className="flex items-center gap-1">
+                <Calendar size={14} className="text-twitter-blue-500 dark:text-twitter-blue-400 flex-shrink-0" />
                 <span className="text-twitter-blue-600 dark:text-twitter-blue-300 text-xs transition-colors duration-200">
                   {h.eventDate ? new Date(h.eventDate).toLocaleDateString() : 'TBA'}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                {CATEGORY_ICONS[h.category] || <Star size={18} className="text-twitter-dark-400 flex-shrink-0" />} 
+              <div className="flex items-center gap-1">
+                {CATEGORY_ICONS[h.category] || <Star size={14} className="text-twitter-dark-400 flex-shrink-0" />} 
                 <span className="text-xs text-twitter-dark-600 dark:text-twitter-dark-300 transition-colors duration-200">{h.category}</span>
               </div>
             </div>
             
             {/* Action Buttons */}
-            <div className="flex gap-2 mt-auto pt-4 flex-wrap">
+            <div className="flex gap-1 mt-auto pt-2 flex-wrap">
               <button
                 onClick={() => handleViewDetails(h)}
-                className="btn-primary flex-1 min-w-[120px] hover-scale"
+                className="btn-primary text-xs flex-1 min-w-[80px] hover-scale py-1 px-2"
               >
-                View Details
+                View
               </button>
               
               {!h.isRegistered ? (
@@ -393,7 +384,7 @@ const StudentDashboard = () => {
                   onClick={() => handleRegister(h.id)} 
                   disabled={!!pendingRegistrations[h.id]} 
                   className={`
-                    font-semibold py-2 px-4 rounded-full shadow-md transition-all flex-1 min-w-[100px]
+                    font-semibold text-xs py-1 px-2 rounded-full shadow transition-all flex-1 min-w-[70px]
                     ${
                       pendingRegistrations[h.id] 
                         ? 'bg-twitter-yellow-500 text-black hover:bg-twitter-yellow-600 cursor-not-allowed' 
@@ -401,28 +392,28 @@ const StudentDashboard = () => {
                     }
                   `}
                 >
-                  {pendingRegistrations[h.id] ? 'Checking...' : 'Register'}
+                  {pendingRegistrations[h.id] ? '...' : 'Register'}
                 </button>
               ) : (
                 <button 
                   onClick={() => window.open(h.link, '_blank', 'noopener,noreferrer')}
-                  className="bg-gradient-success text-white font-semibold py-2 px-4 rounded-full shadow-md hover-scale transition-all flex-1 min-w-[100px] focus:ring-2 focus:ring-twitter-green-400 focus:ring-offset-2 dark:focus:ring-offset-twitter-dark-800"
+                  className="bg-gradient-success text-white font-semibold text-xs py-1 px-2 rounded-full shadow hover-scale transition-all flex-1 min-w-[70px] focus:ring-1 focus:ring-twitter-green-400 focus:ring-offset-1 dark:focus:ring-offset-twitter-dark-800"
                 >
-                  Visit Site
+                  Visit
                 </button>
               )}
             </div>
             
             {/* External Link */}
-            <div className="mt-4 pt-4 border-t border-twitter-light-200 dark:border-twitter-dark-700 transition-colors duration-200">
+            <div className="mt-3 pt-3 border-t border-twitter-light-200 dark:border-twitter-dark-700 transition-colors duration-200">
               <a 
                 href={h.link} 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="text-twitter-blue-500 dark:text-twitter-blue-400 hover:text-twitter-blue-600 dark:hover:text-twitter-blue-300 text-xs flex items-center gap-1 transition-colors duration-200"
               >
-                <ExternalLink size={14} className="flex-shrink-0" /> 
-                <span>Visit Competition Page</span>
+                <ExternalLink size={12} className="flex-shrink-0" /> 
+                <span className="text-xs">Visit Page</span>
               </a>
             </div>
           </div>

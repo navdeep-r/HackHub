@@ -3,7 +3,6 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const { auth, requireAnyRole } = require('../middleware/auth');
-const googleAuthService = require('../services/googleAuth');
 
 const router = express.Router();
 
@@ -225,106 +224,6 @@ router.put('/profile', auth, requireAnyRole, [
   }
 });
 
-
-router.get('/google/callback', async (req, res) => {
-  const { code, state: userId } = req.query;
-
-  if (!code) {
-    return res.status(400).send('No code provided');
-  }
-
-
-  try {
-    const { access_token, refresh_token, expiry_date } = await googleAuthService.getTokensFromCode(code);
-
-    if (!access_token || !refresh_token) {
-      return res.status(400).json({ error: 'Access token and refresh token are required' });
-    }
-
-    console.log(
-      await User.findByIdAndUpdate(
-        userId,
-        {
-          $set: {
-            'google.accessToken': access_token,
-            'google.refreshToken': refresh_token,
-            'google.tokenExpiry': expiry_date ? new Date(expiry_date) : null,
-            'google.linkedAt': new Date()
-          }
-        },
-        { new: true } // return updated doc instead of old one
-      )
-    );
-    res.redirect("http://localhost:3000/auth/google/callback");
-  } catch (error) {
-    console.error('Google tokens storage error:', error);
-    res.status(500).json({ error: 'Failed to store Google tokens' });
-  }
-
-  // try {
-  //   const { tokens } = await oauth2Client.getToken(code);
-  //   console.log('Tokens:', tokens);
-
-  //   // TODO: save tokens in DB with userId
-  //   // e.g. await User.findByIdAndUpdate(userId, { googleTokens: tokens });
-
-  //   // Redirect user back to frontend after success
-  //   res.redirect('http://localhost:3000/registration-confirmation?success=true');
-  // } catch (err) {
-  //   console.error('Token exchange error:', err);
-  //   res.redirect('http://localhost:3000/registration-confirmation?success=false');
-  // }
-});
-
-
-// Google OAuth token storage (for email monitoring)
-// router.post('/google-tokens', auth, requireAnyRole, async (req, res) => {
-//   try {
-//     const { accessToken, refreshToken, expiry } = req.body;
-
-//     if (!accessToken || !refreshToken) {
-//       return res.status(400).json({ error: 'Access token and refresh token are required' });
-//     }
-
-//     await User.findByIdAndUpdate(req.user._id, {
-//       googleAccessToken: accessToken,
-//       googleRefreshToken: refreshToken,
-//       googleTokenExpiry: expiry ? new Date(expiry) : null
-//     });
-
-//     res.json({ message: 'Google tokens stored successfully' });
-//   } catch (error) {
-//     console.error('Google tokens storage error:', error);
-//     res.status(500).json({ error: 'Failed to store Google tokens' });
-//   }
-// });
-
-// Debug endpoint to check monitoring status
-router.get('/debug/monitoring', auth, async (req, res) => {
-  try {
-    const activeMonitoring = googleAuthService.getActiveMonitoring();
-    res.json({
-      activeMonitoringSessions: Array.from(activeMonitoring.keys()),
-      totalActiveSessions: activeMonitoring.size,
-      details: Object.fromEntries(
-        Array.from(activeMonitoring.entries()).map(([key, data]) => [
-          key,
-          {
-            startTime: data.startTime,
-            timeoutId: !!data.timeoutId,
-            intervalId: !!data.intervalId
-          }
-        ])
-      )
-    });
-  } catch (error) {
-    console.error('Debug monitoring error:', error);
-    res.status(500).json({ error: 'Failed to get monitoring status' });
-  }
-});
-
-module.exports = router;
-
 // Dev-only quick login endpoint
 // POST /api/auth/dev-login { role: 'faculty' | 'student', email?: string }
 if (process.env.NODE_ENV !== 'production') {
@@ -364,3 +263,5 @@ if (process.env.NODE_ENV !== 'production') {
     }
   });
 }
+
+module.exports = router;

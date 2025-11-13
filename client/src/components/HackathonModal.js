@@ -79,8 +79,6 @@ const formatDate = (dateString) => {
 
 const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
 
-const getMonitorStorageKey = (hackathonId) => `monitor:${hackathonId}`;
-
 // Countdown Timer Component
 const CountdownTimer = ({ deadline, className = '' }) => {
   const [timeLeft, setTimeLeft] = useState(() => getTimeLeft(deadline));
@@ -145,7 +143,6 @@ const RegistrationStatus = ({
   confirmedRegistration,
   registrationFailed,
   pendingMonitor,
-  monitoringTimeLeft,
   onRegister,
   registering,
   isDeadlinePassed,
@@ -182,25 +179,16 @@ const RegistrationStatus = ({
 
   // pending monitor (checking)
   if (pendingMonitor) {
-    const minutes = Math.floor(monitoringTimeLeft / 60);
-    const seconds = monitoringTimeLeft % 60;
-
     return (
       <div className="p-6 border border-white/10 rounded-xl bg-white/5">
         <div className="text-center">
           <Loader2 className="mx-auto mb-3 text-primary animate-spin" size={32} />
-          <h3 className="font-semibold text-foreground mb-2">Confirming Registration</h3>
+          <h3 className="font-semibold text-foreground mb-2">Processing Registration</h3>
           <p className="text-sm text-muted-foreground mb-4">
             {role === 'faculty'
-              ? 'Checking email for confirmation...'
-              : 'Checking your email for confirmation...'}
+              ? 'Processing your registration...'
+              : 'Processing your registration...'}
           </p>
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/6 rounded-lg">
-            <Clock size={16} className="text-primary" />
-            <span className="text-sm font-medium text-foreground">
-              {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
-            </span>
-          </div>
         </div>
       </div>
     );
@@ -450,7 +438,6 @@ const HackathonModal = ({
   const [pendingMonitor, setPendingMonitor] = useState(false);
   const [confirmedRegistration, setConfirmedRegistration] = useState(false);
   const [registrationFailed, setRegistrationFailed] = useState(false);
-  const [monitoringTimeLeft, setMonitoringTimeLeft] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortKey, setSortKey] = useState('registrationDate');
   const [sortDir, setSortDir] = useState('desc');
@@ -462,26 +449,6 @@ const HackathonModal = ({
   useEffect(() => {
     setFormData(normalizeToForm(hackathon || {}));
   }, [hackathon]);
-
-  // Re-hydrate monitoring state
-  useEffect(() => {
-    if (!hackathon?.id) return;
-    const key = getMonitorStorageKey(hackathon.id);
-    try {
-      const raw = localStorage.getItem(key);
-      if (!raw) return;
-      const saved = JSON.parse(raw);
-      if (saved?.startedAt && Date.now() - saved.startedAt < 5 * 60 * 1000) {
-        setPendingMonitor(true);
-        if (typeof saved.remainingSec === 'number') {
-          const remain = Math.max(0, saved.remainingSec - Math.floor((Date.now() - saved.savedAt) / 1000));
-          setMonitoringTimeLeft(remain);
-        }
-      } else {
-        localStorage.removeItem(key);
-      }
-    } catch { /* ignore */ }
-  }, [hackathon?.id]);
 
   // Load analytics
   useEffect(() => {
@@ -542,25 +509,6 @@ const HackathonModal = ({
     let attempts = 0;
     let pollInterval = null;
     const maxAttempts = 10;
-    const totalTime = 5 * 60;
-    setMonitoringTimeLeft(totalTime);
-
-    const countdownInterval = setInterval(() => {
-      if (cancelled) return;
-      setMonitoringTimeLeft(prev => {
-        const newTime = prev - 1;
-        if (newTime <= 0) return 0;
-        try {
-          const key = getMonitorStorageKey(hackathon.id);
-          localStorage.setItem(key, JSON.stringify({
-            startedAt: Date.now() - (300 - newTime) * 1000,
-            savedAt: Date.now(),
-            remainingSec: newTime
-          }));
-        } catch { /* ignore */ }
-        return newTime;
-      });
-    }, 1000);
 
     const checkStatus = async () => {
       if (cancelled) return;
@@ -577,21 +525,15 @@ const HackathonModal = ({
           setConfirmedRegistration(true);
           setIsRegistered(true);
           setRegistrationFailed(false);
-          setMonitoringTimeLeft(0);
-          if (toast) toast.success('Registration confirmed via email.');
+          if (toast) toast.success('Registration confirmed!');
           if (onRegistered) onRegistered(hackathon.id);
           if (pollInterval) clearInterval(pollInterval);
-          clearInterval(countdownInterval);
-          try { localStorage.removeItem(getMonitorStorageKey(hackathon.id)); } catch {}
           return;
         } else if (attempts >= maxAttempts && !cancelled) {
           setPendingMonitor(false);
           setRegistrationFailed(true);
-          setMonitoringTimeLeft(0);
           if (toast) toast.error('Registration confirmation not found within 5 minutes.');
           if (pollInterval) clearInterval(pollInterval);
-          clearInterval(countdownInterval);
-          try { localStorage.removeItem(getMonitorStorageKey(hackathon.id)); } catch {}
           return;
         }
       } catch (error) {
@@ -599,11 +541,8 @@ const HackathonModal = ({
         if (attempts >= 3 && !cancelled) {
           setPendingMonitor(false);
           setRegistrationFailed(true);
-          setMonitoringTimeLeft(0);
           if (toast) toast.error('Failed to verify registration.');
           if (pollInterval) clearInterval(pollInterval);
-          clearInterval(countdownInterval);
-          try { localStorage.removeItem(getMonitorStorageKey(hackathon.id)); } catch {}
         }
       }
     };
@@ -619,17 +558,11 @@ const HackathonModal = ({
       cancelled = true;
       clearTimeout(initialTimeout);
       if (pollInterval) clearInterval(pollInterval);
-      clearInterval(countdownInterval);
-      setMonitoringTimeLeft(0);
-      try { localStorage.removeItem(getMonitorStorageKey(hackathon.id)); } catch {}
     };
   }, [role, pendingMonitor, hackathon?.id, onRegistered, studentAPI, registrationAPI, toast]);
 
   const handleRegisterNow = useCallback(async () => {
     if (!hackathon?.id || !user?.email || !hackathonAPI) return;
-
-    let toastId;
-    if (toast) toastId = toast.loading('Submitting registration...');
 
     // Immediately set registered state for visual feedback
     setIsRegistered(true);
@@ -644,46 +577,34 @@ const HackathonModal = ({
     }, 2000);
 
     try {
-      setRegistrationFailed(false);
-      setMonitoringTimeLeft(0);
-
-      // Show pending monitor state to wait for confirmation
-      setPendingMonitor(true);
-
-      try {
-        const key = getMonitorStorageKey(hackathon.id);
-        localStorage.setItem(key, JSON.stringify({
-          startedAt: Date.now(),
-          savedAt: Date.now(),
-          remainingSec: 300
-        }));
-      } catch { /* ignore */ }
-
       // Use hackathonAPI for students, registrationAPI for faculty
       const apiToUse = role === 'student' ? hackathonAPI : registrationAPI;
       const res = await apiToUse.registerForHackathon(hackathon.id, { emailUsed: user.email });
 
-      if (toast) toast.success('Registration submitted — checking for confirmation.', { id: toastId });
-
-      // If API returns confirmation immediately, mark confirmed
-      if (res?.data?.registration?.confirmationStatus === 'confirmed') {
-        setConfirmedRegistration(true);
-      }
+      // Mark as confirmed immediately without waiting for polling
+      setConfirmedRegistration(true);
+      setRegistrationFailed(false);
+      
+      // Call onRegistered callback if provided
+      if (onRegistered) onRegistered(hackathon.id);
+      
+      // Show success message
+      if (toast) toast.success('Successfully registered for hackathon!');
     } catch (error) {
-      if (toast && toastId) toast.dismiss(toastId);
       console.error('Registration failed:', error);
       const errorMessage = error?.response?.data?.error || 'Registration failed. Please try again.';
       if (toast) toast.error(errorMessage);
-      setPendingMonitor(false);
-      setRegistrationFailed(true);
-      // Revert optimistic UI if needed
+      
+      // Revert optimistic UI on error
       setIsRegistered(false);
+      setConfirmedRegistration(false);
       setShowConfetti(false); // Hide confetti on error
-      try { localStorage.removeItem(getMonitorStorageKey(hackathon.id)); } catch { /* ignore */ }
+      setRegistrationFailed(true);
     } finally {
       setRegistering(false);
+      setPendingMonitor(false); // Ensure pending monitor is always turned off
     }
-  }, [hackathon?.id, user?.email, hackathonAPI, registrationAPI, role, toast]);
+  }, [hackathon?.id, user?.email, hackathonAPI, registrationAPI, role, toast, onRegistered]);
 
   const handleFormChange = useCallback((e) => {
     const { name, value } = e.target;
@@ -1227,7 +1148,6 @@ const HackathonModal = ({
                       confirmedRegistration={confirmedRegistration}
                       registrationFailed={registrationFailed}
                       pendingMonitor={pendingMonitor}
-                      monitoringTimeLeft={monitoringTimeLeft}
                       onRegister={handleRegisterNow}
                       registering={registering}
                       isDeadlinePassed={isDeadlinePassed}

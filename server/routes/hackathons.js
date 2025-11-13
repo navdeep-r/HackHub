@@ -1,9 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const Hackathon = require('../models/Hackathon');
-const User = require('../models/User');
 const { auth, requireFaculty, requireStudent } = require('../middleware/auth');
-const googleAuthService = require('../services/googleAuth');
 
 const router = express.Router();
 
@@ -326,43 +324,13 @@ router.post('/:id/register', auth, requireStudent, [
     // Register student
     await hackathon.registerStudent(req.user._id, emailUsed);
 
-    // Start background monitoring for unstop confirmations (12 hours window)
-    let monitoringStarted = false;
-    let gmailLinked = Boolean(req.user.google && req.user.google.accessToken);
-    let gmailAuthUrl;
-    try {
-      if (gmailLinked) {
-        await googleAuthService.startMonitoring(req.user._id, hackathon._id, emailUsed, {
-          intervalMinutes: 1,
-          totalWindowHours: 1,
-          allowedDomains: ['emails.unstop.com'],
-          subjectRegex: /.*(registration|confirmed|success|welcome|you are registered|registration successful).*/i
-        });
-        // await googleAuthService.startMonitoring(req.user._id, hackathon._id, emailUsed, {
-        //   intervalMinutes: 1,
-        //   totalWindowHours: 1 / 20,
-        //   allowedDomains: ['unstop.com'],
-        //   subjectRegex: /(registration|confirmed|success|welcome|you are registered|registration successful)/i
-        // });
-        monitoringStarted = true;
-      } else {
-        // console.log("User: ", req.user);
-        gmailAuthUrl = googleAuthService.generateAuthUrl(req.user._id);
-      }
-    } catch (monitorErr) {
-      console.error('Failed to start email monitoring:', monitorErr.message);
-    }
-
     res.json({
       message: 'Successfully registered for hackathon',
       hackathon: {
         id: hackathon._id,
         title: hackathon.title,
         registrations: hackathon.registrations
-      },
-      monitoringStarted,
-      gmailLinked,
-      gmailAuthUrl
+      }
     });
   } catch (error) {
     console.error('Registration error:', error);
