@@ -6,6 +6,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import HackathonModal from './HackathonModal';
+import Countdown from './Countdown';
 import ThemeToggle from './ThemeToggle';
 import { hackathonAPI, studentAPI, registrationAPI } from '../services/api';
 import toast from 'react-hot-toast';
@@ -356,13 +357,22 @@ const StudentDashboard = () => {
               {h.description}
             </p>
             
-            {/* Date and Category */}
+            {/* Date, Countdown and Category */}
             <div className="space-y-1 mb-3">
               <div className="flex items-center gap-1">
                 <Calendar size={14} className="text-twitter-blue-500 dark:text-twitter-blue-400 flex-shrink-0" />
                 <span className="text-twitter-blue-600 dark:text-twitter-blue-300 text-xs transition-colors duration-200">
                   {h.eventDate ? new Date(h.eventDate).toLocaleDateString() : 'TBA'}
                 </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Clock size={14} className="text-twitter-green-500 dark:text-twitter-green-400 flex-shrink-0" />
+                <Countdown
+                  target={h.eventDate}
+                  compact
+                  className="text-xs text-twitter-green-600 dark:text-twitter-green-300"
+                  prefix="Starts in"
+                />
               </div>
               <div className="flex items-center gap-1">
                 {CATEGORY_ICONS[h.category] || <Star size={14} className="text-twitter-dark-400 flex-shrink-0" />} 

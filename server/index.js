@@ -7,6 +7,8 @@ const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 
+const Hackathon = require('./models/Hackathon');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -72,6 +74,10 @@ const connectDB = async () => {
     const mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/hackhub';
     const conn = await mongoose.connect(mongoUri);
     console.log(`MongoDB Connected: ${conn.connection.host}`);
+
+    // Ensure MongoDB indexes match the schema definition (drops stale ones automatically)
+    await Hackathon.syncIndexes();
+    console.log('Hackathon indexes synchronized');
   } catch (error) {
     console.error('MongoDB connection error:', error);
     if (process.env.NODE_ENV !== 'production') {
@@ -81,6 +87,8 @@ const connectDB = async () => {
         const memUri = memoryMongoServer.getUri();
         const conn = await mongoose.connect(memUri);
         console.log(`MongoDB Memory Server Connected: ${conn.connection.host}`);
+        await Hackathon.syncIndexes();
+        console.log('Hackathon indexes synchronized (memory server)');
       } catch (memErr) {
         console.error('Failed to start MongoDB Memory Server:', memErr);
         process.exit(1);
